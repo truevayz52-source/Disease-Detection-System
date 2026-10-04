@@ -1,0 +1,9 @@
+packages:
+  - client
+  - server
+  - e2e
+
+# Flat npm-style node_modules — the project path exceeds Windows MAX_PATH
+# (260 chars) under the .pnpm layout, which makes spawned binaries (esbuild)
+# fail with ENOENT. Hoisted paths stay under the limit.
+nodeLinker: hoisted

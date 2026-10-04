@@ -1,0 +1,25 @@
+# v0 sandbox internal files
+__v0_runtime_loader.js
+__v0_devtools.tsx
+__v0_jsx-dev-runtime.ts
+.snowflake/
+.v0-trash/
+.vercel/
+
+# Environment variables
+.env*.local
+
+# Common ignores
+node_modules
+.next/
+.DS_Store
+# App env and runtime
+server/.env
+server/uploads/
+client/dist/
+server/dist/
+analytics/models/
+analytics/*.log
+analytics/test-audio.wav
+e2e/test-results/
+e2e/playwright-report/

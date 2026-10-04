@@ -1,0 +1,9 @@
+import { useState } from "react"
+import { Link,useLocation } from "react-router-dom"
+import { api } from "@/lib/api"
+import { Field,Action } from "@/components/workspace"
+import { usePreferences } from "@/lib/preferences"
+export default function PasswordReset(){const{t}=usePreferences();
+  const location=useLocation(),reset=location.pathname==="/reset-password",[email,setEmail]=useState(""),[password,setPassword]=useState(""),[code,setCode]=useState(""),[message,setMessage]=useState("")
+  return <main className="flex h-svh justify-center overflow-y-auto bg-background p-4"><section className="my-auto w-full max-w-md space-y-5 rounded-xl border bg-card p-6"><p className="text-sm font-semibold text-primary">{t("Disease Detection System")}</p><h1 className="text-2xl font-semibold">{reset?"Reset password":"Forgot password"}</h1>{reset?<><Field label={t("New password")} type="password" value={password} onChange={setPassword}/><p className="text-xs text-muted-foreground">{t("At least 8 characters with uppercase, lowercase and a number.")}</p><Field label={t("Authenticator or recovery code (if enabled)")} value={code} onChange={setCode}/></>:<Field label={t("Email address")} type="email" value={email} onChange={setEmail}/>}<Action onClick={async()=>{const r=await api(`/user/${reset?"reset-password":"request-password-reset"}`,{method:"POST",body:JSON.stringify(reset?{token:location.hash.slice(1),newPassword:password,code}:{email})});setMessage(r.message||"Password updated. Sign in with your new password.");if(reset)history.replaceState(null,"","/reset-password")}}>{reset?"Reset password":"Request reset link"}</Action>{message&&<p role="status" className="text-sm">{message}</p>}<Link className="block text-sm underline" to="/sign-in">{t("Return to sign in")}</Link></section></main>
+}

@@ -1,0 +1,18 @@
+{
+  "en":  { "name": "English",                 "nativeName": "English",                 "written": true },
+  "sn":  { "name": "Shona",                   "nativeName": "chiShona",                "written": true },
+  "nd":  { "name": "Ndebele",                 "nativeName": "isiNdebele",              "written": true },
+  "ny":  { "name": "Chewa",                   "nativeName": "Chichewa / Chinyanja",    "written": true },
+  "sbn": { "name": "Chibarwe",                "nativeName": "Chibarwe",                "written": true, "draft": true },
+  "kck": { "name": "Kalanga",                 "nativeName": "TjiKalanga",              "written": true, "draft": true },
+  "huc": { "name": "Koisan (Tshwa)",          "nativeName": "Tshwa",                   "written": true, "draft": true },
+  "nmq": { "name": "Nambya",                  "nativeName": "ChiNambya",               "written": true, "draft": true },
+  "ndc": { "name": "Ndau",                    "nativeName": "ChiNdau",                 "written": true, "draft": true },
+  "ts":  { "name": "Shangani (Tsonga)",       "nativeName": "Xitsonga",                "written": true },
+  "zsl": { "name": "Zimbabwe Sign Language",  "nativeName": "Zimbabwe Sign Language",  "written": false, "note": "Signed video guidance is a planned module — text renders in English." },
+  "st":  { "name": "Sotho",                   "nativeName": "Sesotho",                 "written": true },
+  "toi": { "name": "Tonga",                   "nativeName": "chiTonga",                "written": true, "draft": true },
+  "tn":  { "name": "Tswana",                  "nativeName": "Setswana",                "written": true },
+  "ve":  { "name": "Venda",                   "nativeName": "Tshivenda",               "written": true },
+  "xh":  { "name": "Xhosa",                   "nativeName": "isiXhosa",                "written": true }
+}

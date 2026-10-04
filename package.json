@@ -1,0 +1,24 @@
+{
+  "name": "disease-detection-system",
+  "version": "1.0.0",
+  "private": true,
+  "packageManager": "pnpm@11.1.3",
+  "scripts": {
+    "dev": "concurrently -n \"Disease Detection System API,Disease Detection System Web,Disease Detection System Speech\" -c blue,green,magenta \"pnpm --filter server dev\" \"pnpm --filter client dev\" \"pnpm dev:transcription\"",
+    "dev:server": "pnpm --filter server dev",
+    "dev:client": "pnpm --filter client dev",
+    "dev:analytics": "C:\\dds-venv\\Scripts\\python.exe -m uvicorn main:app --host 127.0.0.1 --port 8000 --app-dir analytics",
+    "dev:transcription": "C:\\dds-venv\\Scripts\\python.exe -m uvicorn transcription:app --host 127.0.0.1 --port 8001 --app-dir analytics",
+    "build": "pnpm --filter client build && pnpm --filter server build",
+    "seed": "pnpm --filter server seed",
+    "test:e2e": "pnpm --filter e2e test",
+    "migrate": "pnpm --filter server migrate",
+    "i18n:sync": "node scripts/sync-i18n.mjs",
+    "i18n:scan": "node scripts/check-i18n.mjs --scan",
+    "i18n:check": "node scripts/check-i18n.mjs"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "prettier": "^3.9.9"
+  }
+}

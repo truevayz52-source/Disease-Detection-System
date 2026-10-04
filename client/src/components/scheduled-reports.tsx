@@ -1,0 +1,13 @@
+import { useState } from "react"
+import useSWR from "swr"
+import { api } from "@/lib/api"
+import { Action, Field, LoadState, Panel } from "./workspace"
+import { usePreferences } from "@/lib/preferences"
+
+export function ScheduledReports() {const{t}=usePreferences();
+  const [name,setName]=useState("District mortality summary"),[days,setDays]=useState("30"),[interval,setInterval]=useState("168")
+  const [emailNotification,setEmailNotification]=useState(false)
+  const schedules=useSWR<any>("/reports/scheduled",api),runs=useSWR<any>("/reports/runs",api,{refreshInterval:60000})
+  return <><Panel title={t("Scheduled reports")}><Field label={t("Report name")} value={name} onChange={setName}/><Field label={t("Reporting window (days)")} value={days} onChange={setDays} type="number"/><label className="block text-sm">Frequency<select className="ml-3 rounded border bg-background p-2" value={interval} onChange={e=>setInterval(e.target.value)}><option value="24">Daily</option><option value="168">Weekly</option></select></label><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={emailNotification} onChange={e=>setEmailNotification(e.target.checked)}/>{t("Email me when a report is ready (requires configured SMTP)")}</label><Action onClick={async()=>{await api("/reports/schedule",{method:"POST",body:JSON.stringify({name,days:Number(days),intervalHours:Number(interval),emailNotification})});await schedules.mutate()}}>{t("Create schedule")}</Action><LoadState error={schedules.error}/>{schedules.data?.items.map((s:any)=><div key={s.report_id} className="flex flex-wrap items-center justify-between gap-3 border-t pt-3"><span>{s.report_name} · {s.is_active?"Active":"Paused"}</span><Action variant="outline" onClick={async()=>{await api(`/reports/scheduled/${s.report_id}`,{method:"PATCH",body:JSON.stringify({active:!s.is_active})});await schedules.mutate()}}>{s.is_active?"Pause":"Resume"}</Action></div>)}</Panel><Panel title={t("Generated reports")}><LoadState error={runs.error} empty={runs.data?.items.length===0}/>{runs.data?.items.map((r:any)=><div key={r.run_id} className="flex flex-wrap items-center justify-between gap-3"><span>{new Date(r.created_at).toLocaleString()}</span><Action variant="outline" onClick={async()=>{const result=await api(`/reports/runs/${r.run_id}`),url=URL.createObjectURL(new Blob([JSON.stringify(result,null,2)],{type:"application/json"}));const a=document.createElement("a");a.href=url;a.download=`dds-report-${r.run_id}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}}>{t("Download report")}</Action></div>)}</Panel></>
+}
+
