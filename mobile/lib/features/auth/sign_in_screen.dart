@@ -1,11 +1,17 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../data/api_client.dart';
 import '../../data/auth_repository.dart';
+import '../../data/biometric_auth.dart';
+import '../../data/server_resolver.dart';
 
 import '../../ui/theme.dart';
+import '../../ui/language_menu.dart';
 
 import '../../l10n/app_localizations.dart';
 
@@ -24,15 +30,62 @@ class _SignInScreenState extends State<SignInScreen> {
   final _code = TextEditingController();
   bool _needsCode = false;
   bool _showPassword = false;
+  bool _biometricAvailable = false;
   String? _error;
   bool _loading = false;
 
+  /// null = still probing; true/false = server reachability for the chip.
+  bool? _serverUp;
+
+  @override
+  void initState() {
+    super.initState();
+    _email.addListener(_checkBiometric);
+    _restoreLastEmail();
+    _probeServer();
+  }
+
+  /// Prefill the last signed-in account so offline/biometric users don't
+  /// retype their address.
+  Future<void> _restoreLastEmail() async {
+    final last = (await SharedPreferences.getInstance()).getString(
+      'dds_last_email',
+    );
+    if (last != null && mounted && _email.text.isEmpty) {
+      _email.text = last;
+    }
+  }
+
+  /// Live probe against the resolved base URL — shown as a chip so users
+  /// can tell "wrong server" apart from "wrong password".
+  Future<void> _probeServer() async {
+    final api = context.read<ApiClient>();
+    final up = await ServerResolver.probe(
+      api.baseUrl,
+      timeout: const Duration(seconds: 4),
+    );
+    if (mounted && up != _serverUp) setState(() => _serverUp = up);
+  }
+
   @override
   void dispose() {
+    _email.removeListener(_checkBiometric);
     _email.dispose();
     _password.dispose();
     _code.dispose();
     super.dispose();
+  }
+
+  Future<void> _checkBiometric() async {
+    final email = _email.text.trim();
+    if (email.isEmpty) {
+      if (_biometricAvailable) setState(() => _biometricAvailable = false);
+      return;
+    }
+    final enabled = await BiometricAuth.isEnabled(email);
+    if (mounted && enabled != _biometricAvailable) {
+      setState(() => _biometricAvailable = enabled);
+    }
   }
 
   Future<void> _submit() async {
@@ -41,8 +94,9 @@ class _SignInScreenState extends State<SignInScreen> {
       _error = null;
       _loading = true;
     });
+    final auth = context.read<AuthRepository>();
+    final api = context.read<ApiClient>();
     try {
-      final auth = context.read<AuthRepository>();
       await auth.signIn(
         _email.text.trim(),
         _password.text,
@@ -56,8 +110,15 @@ class _SignInScreenState extends State<SignInScreen> {
       // router redirect takes over once the user is set
     } on ApiException catch (e) {
       if (e.requiresTwoFactor) _needsCode = true;
+      var message = e.message;
+      if (e.status == 0) {
+        // Server unreachable or offline account missing — tell the user the
+        // address being tried so they can fix it via the gear sheet.
+        message = '$message\n${tr('Server: {url}', {'url': api.baseUrl})}';
+        unawaited(_probeServer());
+      }
       setState(() {
-        _error = e.message;
+        _error = message;
         _loading = false;
       });
     } catch (e) {
@@ -68,20 +129,67 @@ class _SignInScreenState extends State<SignInScreen> {
     }
   }
 
+  Future<void> _submitBiometric() async {
+    final email = _email.text.trim();
+    if (email.isEmpty) return;
+    setState(() {
+      _error = null;
+      _loading = true;
+    });
+    try {
+      final auth = context.read<AuthRepository>();
+      await auth.signInWithBiometric(email);
+      if (auth.offlineSession && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(tr('Signed in — offline mode.'))),
+        );
+      }
+    } on ApiException catch (e) {
+      setState(() {
+        _error = e.message;
+        _loading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _error = tr('Biometric sign-in failed');
+        _loading = false;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          final wide = constraints.maxWidth >= 1024;
-          return Row(
-            children: [
-              if (wide) const Expanded(child: _HeroPanel()),
-              Expanded(child: _buildForm(context)),
-            ],
-          );
-        },
+      body: Stack(
+        children: [
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final wide = constraints.maxWidth >= 1024;
+              return Row(
+                children: [
+                  if (wide) const Expanded(child: _HeroPanel()),
+                  Expanded(child: _buildForm(context)),
+                ],
+              );
+            },
+          ),
+          Positioned(
+            top: 0,
+            right: 0,
+            child: SafeArea(
+              child: Row(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(right: 4),
+                    child: _StatusDot(up: _serverUp),
+                  ),
+                  const LanguageMenuButton(),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -198,7 +306,7 @@ class _SignInScreenState extends State<SignInScreen> {
                                   ),
                                 ),
                               ),
-                            _label('Email Address'),
+                            _label(tr('Email Address')),
                             TextField(
                               controller: _email,
                               keyboardType: TextInputType.emailAddress,
@@ -209,7 +317,7 @@ class _SignInScreenState extends State<SignInScreen> {
                               onSubmitted: (_) => _submit(),
                             ),
                             const SizedBox(height: 14),
-                            _label('Password'),
+                            _label(tr('Password')),
                             TextField(
                               controller: _password,
                               obscureText: !_showPassword,
@@ -232,7 +340,7 @@ class _SignInScreenState extends State<SignInScreen> {
                             ),
                             if (_needsCode) ...[
                               const SizedBox(height: 14),
-                              _label('Authenticator or recovery code'),
+                              _label(tr('Authenticator or recovery code')),
                               TextField(
                                 controller: _code,
                                 decoration: InputDecoration(
@@ -268,6 +376,23 @@ class _SignInScreenState extends State<SignInScreen> {
                                       ),
                               ),
                             ),
+                            if (_biometricAvailable) ...[
+                              const SizedBox(height: 10),
+                              SizedBox(
+                                height: 44,
+                                child: OutlinedButton.icon(
+                                  onPressed: _loading ? null : _submitBiometric,
+                                  icon: const Icon(Icons.fingerprint),
+                                  label: Text(tr('Sign in with biometrics')),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: DdsColors.linkBlue,
+                                    side: const BorderSide(
+                                      color: DdsColors.linkBlue,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
                             TextButton(
                               onPressed: () => context.push('/forgot-password'),
                               child: Text(
@@ -328,30 +453,38 @@ class _SignInScreenState extends State<SignInScreen> {
 class _HeroPanel extends StatelessWidget {
   const _HeroPanel();
 
-  static const _features = [
+  static final _features = [
     (
       Icons.monitor_heart_outlined,
-      'Outbreak detection',
-      'Real-time mortality surveillance, automated threshold alerts & early cluster warnings',
-      'Live Surveillance',
+      tr('Outbreak detection'),
+      tr(
+        'Real-time mortality surveillance, automated threshold alerts & early cluster warnings',
+      ),
+      tr('Live Surveillance'),
     ),
     (
       Icons.find_in_page_outlined,
-      'Tele-pathology',
-      'Remote digital specimen review and authenticated digital autopsy certification',
-      'Digital Forensics',
+      tr('Tele-pathology'),
+      tr(
+        'Remote digital specimen review and authenticated digital autopsy certification',
+      ),
+      tr('Digital Forensics'),
     ),
     (
       Icons.place_outlined,
-      'GIS analytics',
-      'District → provincial → national disease mapping, hotspot heatmaps and spatial mortality patterns',
-      'Geospatial Intel',
+      tr('GIS analytics'),
+      tr(
+        'District → provincial → national disease mapping, hotspot heatmaps and spatial mortality patterns',
+      ),
+      tr('Geospatial Intel'),
     ),
     (
       Icons.wifi_off_outlined,
-      'Offline field sync',
-      'Capture mortality data in the field without connectivity — records queue locally and sync when back online',
-      'Field Ready',
+      tr('Offline field sync'),
+      tr(
+        'Capture mortality data in the field without connectivity — records queue locally and sync when back online',
+      ),
+      tr('Field Ready'),
     ),
   ];
 
@@ -503,6 +636,37 @@ class _HeroPanel extends StatelessWidget {
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Server status dot — green when the API answers, red when it doesn't,
+/// grey while probing. Purely informational; server configuration lives in
+/// the admin Facilities page.
+class _StatusDot extends StatelessWidget {
+  const _StatusDot({required this.up});
+
+  /// null = still probing.
+  final bool? up;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = switch (up) {
+      null => DdsColors.mutedForeground,
+      true => DdsColors.success,
+      false => DdsColors.destructive,
+    };
+    return Padding(
+      padding: const EdgeInsets.all(8),
+      child: Container(
+        width: 12,
+        height: 12,
+        decoration: BoxDecoration(
+          color: color,
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.black26, width: 1),
         ),
       ),
     );

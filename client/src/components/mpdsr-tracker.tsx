@@ -60,10 +60,10 @@ export function MPDSRTracker() {const{t}=usePreferences();
             onChange={(e) => setResponseStatus(e.target.value)}
             className="w-full mt-1 rounded-md border p-2"
           >
-            <option value="pending">Pending</option>
+            <option value="pending">{t("Pending")}</option>
             <option value="in_progress">{t("In Progress")}</option>
             <option value="investigation">{t("Under Investigation")}</option>
-            <option value="closed">Closed</option>
+            <option value="closed">{t("Closed")}</option>
           </select>
         </div>
         <div>

@@ -91,8 +91,8 @@ export default function AdminUsersPage() {const{t}=usePreferences();
       <div className="space-y-4 p-4 lg:p-6">
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           <StatCard label={t("Total accounts")} value={stats.total} icon={Users} color="blue" compact />
-          <StatCard label="Active" value={stats.active} icon={UserCheck} color="emerald" compact />
-          <StatCard label="Disabled" value={stats.disabled} icon={UserX} color="red" compact />
+          <StatCard label={t("Active")} value={stats.active} icon={UserCheck} color="emerald" compact />
+          <StatCard label={t("Disabled")} value={stats.disabled} icon={UserX} color="red" compact />
           <StatCard label={t("Facility-linked")} value={stats.facilityUsers} icon={ShieldCheck} color="purple" compact />
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -104,10 +104,10 @@ export default function AdminUsersPage() {const{t}=usePreferences();
             <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">{t("All roles")}</SelectItem>
-              {ROLES.map((r) => <SelectItem key={r} value={r}>{ROLE_LABELS[r]}</SelectItem>)}
+              {ROLES.map((r) => <SelectItem key={r} value={r}>{t(ROLE_LABELS[r] ?? r)}</SelectItem>)}
             </SelectContent>
           </Select>
-          <Button variant="outline" size="sm" onClick={() => mutate()}><RefreshCw className="size-3.5" /> Refresh</Button>
+          <Button variant="outline" size="sm" onClick={() => mutate()}><RefreshCw className="size-3.5" /> {t("Refresh")}</Button>
           <p className="ml-auto text-sm text-muted-foreground">{items.length} of {data?.items.length ?? 0} account(s)</p>
           <Button size="sm" onClick={() => setOpen(true)}>
             <UserPlus className="size-4" /> New user
@@ -118,12 +118,12 @@ export default function AdminUsersPage() {const{t}=usePreferences();
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead>Facility</TableHead>
-                  <TableHead>Created</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead>{t("Name")}</TableHead>
+                  <TableHead>{t("Email")}</TableHead>
+                  <TableHead>{t("Role")}</TableHead>
+                  <TableHead>{t("Facility")}</TableHead>
+                  <TableHead>{t("Created")}</TableHead>
+                  <TableHead>{t("Status")}</TableHead>
                   <TableHead />
                 </TableRow>
               </TableHeader>
@@ -134,7 +134,7 @@ export default function AdminUsersPage() {const{t}=usePreferences();
                     <TableCell className="text-muted-foreground">{u.email}</TableCell>
                     <TableCell>
                       <Badge variant={ROLE_BADGE_VARIANT[u.role as Role] ?? "outline"}>
-                        {ROLE_LABELS[u.role as Role] ?? u.role}
+                        {t(ROLE_LABELS[u.role as Role] ?? u.role)}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-muted-foreground">{u.facility_name ?? "—"}</TableCell>
@@ -174,7 +174,7 @@ export default function AdminUsersPage() {const{t}=usePreferences();
               <Input value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} />
             </div>
             <div className="space-y-2">
-              <Label>Email</Label>
+              <Label>{t("Email")}</Label>
               <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
             </div>
             <div className="space-y-2">
@@ -183,12 +183,12 @@ export default function AdminUsersPage() {const{t}=usePreferences();
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Role</Label>
+                <Label>{t("Role")}</Label>
                 <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v as Role })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {ROLES.map((r) => (
-                      <SelectItem key={r} value={r}>{ROLE_LABELS[r]}</SelectItem>
+                      <SelectItem key={r} value={r}>{t(ROLE_LABELS[r] ?? r)}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -196,7 +196,7 @@ export default function AdminUsersPage() {const{t}=usePreferences();
               <div className="space-y-2">
                 <Label>{t("Facility (optional)")}</Label>
                 <Select value={form.facilityId} onValueChange={(v) => setForm({ ...form, facilityId: v ?? "" })}>
-                  <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder={t("None")} /></SelectTrigger>
                   <SelectContent>
                     {(facilities?.items ?? []).map((f) => (
                       <SelectItem key={f.facility_id} value={f.facility_id}>{f.facility_name}</SelectItem>
@@ -209,7 +209,7 @@ export default function AdminUsersPage() {const{t}=usePreferences();
               <div className="space-y-2">
                 <Label>{t("Province scope (optional)")}</Label>
                 <Select value={form.province} onValueChange={(v) => setForm({ ...form, province: v ?? "", district: "" })}>
-                  <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder={t("None")} /></SelectTrigger>
                   <SelectContent>
                     {(geo?.provinces ?? []).map((p) => (
                       <SelectItem key={p.province_id} value={p.province_name}>{p.province_name}</SelectItem>
@@ -220,7 +220,7 @@ export default function AdminUsersPage() {const{t}=usePreferences();
               <div className="space-y-2">
                 <Label>{t("District scope (optional)")}</Label>
                 <Select value={form.district} onValueChange={(v) => setForm({ ...form, district: v ?? "" })} disabled={!form.province}>
-                  <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder={t("None")} /></SelectTrigger>
                   <SelectContent>
                     {(geo?.districts ?? []).filter((d) => d.province === form.province).map((d) => (
                       <SelectItem key={d.district_id} value={d.district}>{d.district}</SelectItem>
@@ -231,7 +231,7 @@ export default function AdminUsersPage() {const{t}=usePreferences();
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setOpen(false)}>{t("Cancel")}</Button>
             <Button disabled={saving || !form.fullName || !form.email || form.password.length < 8} onClick={createUser}>
               Create user
             </Button>

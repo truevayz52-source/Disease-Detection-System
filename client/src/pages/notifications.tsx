@@ -17,12 +17,12 @@ import { usePreferences } from "@/lib/preferences"
 
 const fetcher = <T,>(url: string) => api<T>(url)
 
-function exportCsv(items: DeathNotification[]) {
+function exportCsv(items: DeathNotification[], t: (s: string) => string) {
   const header = ["Patient", "National ID", "ICD", "Diagnosis", "Facility", "District", "Province", "Date of death", "Status", "MPDSR"]
   const rows = items.map((n) => [
     n.patient_name, n.national_id ?? "", n.preliminary_icd_code, n.icd_description,
     n.facility_name, n.district, n.province, n.date_of_death,
-    STATUS_LABELS[n.status] ?? n.status, n.is_maternal_perinatal ? "Yes" : "No",
+    t(STATUS_LABELS[n.status] ?? n.status), n.is_maternal_perinatal ? t("Yes") : t("No"),
   ])
   const csv = [header, ...rows].map((r) => r.map((c) => `"${String(c ?? "").replaceAll('"', '""')}"`).join(",")).join("\n")
   const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }))
@@ -34,7 +34,7 @@ function exportCsv(items: DeathNotification[]) {
 }
 
 export default function NotificationsPage() {const{t}=usePreferences();
-  const [q, setQ] = useState(")")
+  const [q, setQ] = useState("")
   const [status, setStatus] = useState("all")
   const [district, setDistrict] = useState("all")
   const [mpdsrOnly, setMpdsrOnly] = useState(false)
@@ -102,7 +102,7 @@ export default function NotificationsPage() {const{t}=usePreferences();
               <SelectItem value="pending_review">{t("Pending review")}</SelectItem>
               <SelectItem value="under_review">{t("Under review")}</SelectItem>
               <SelectItem value="autopsy_complete">{t("Autopsy complete")}</SelectItem>
-              <SelectItem value="finalized">Finalized</SelectItem>
+              <SelectItem value="finalized">{t("Finalized")}</SelectItem>
             </SelectContent>
           </Select>
           <Select value={district} onValueChange={(v) => setDistrict(v ?? "all")}>
@@ -126,7 +126,7 @@ export default function NotificationsPage() {const{t}=usePreferences();
           <Button variant="outline" size="sm" onClick={() => mutate()}>
             <RefreshCw className="size-3.5" /> Refresh
           </Button>
-          <Button variant="outline" size="sm" onClick={() => exportCsv(items)} disabled={!items.length}>
+          <Button variant="outline" size="sm" onClick={() => exportCsv(items, t)} disabled={!items.length}>
             <Download className="size-3.5" /> Export CSV
           </Button>
           <Button asChild className="ml-auto">
@@ -141,14 +141,14 @@ export default function NotificationsPage() {const{t}=usePreferences();
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Patient</TableHead>
+                  <TableHead>{t("Patient")}</TableHead>
                   <TableHead>{t("National ID")}</TableHead>
                   <TableHead>ICD</TableHead>
-                  <TableHead>Facility</TableHead>
-                  <TableHead>District</TableHead>
+                  <TableHead>{t("Facility")}</TableHead>
+                  <TableHead>{t("District")}</TableHead>
                   <TableHead>{t("Date of death")}</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead>{t("Status")}</TableHead>
+                  <TableHead className="text-right">{t("Actions")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -172,12 +172,12 @@ export default function NotificationsPage() {const{t}=usePreferences();
                     <TableCell>{fmtDate(n.date_of_death)}</TableCell>
                     <TableCell>
                       <Badge variant={STATUS_VARIANTS[n.status] ?? "secondary"}>
-                        {STATUS_LABELS[n.status] ?? n.status}
+                        {t(STATUS_LABELS[n.status] ?? n.status)}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
                       <Button asChild variant="outline" size="sm">
-                        <Link to={`/notifications/${n.notification_id}`}><Eye className="size-4" /> View</Link>
+                        <Link to={`/notifications/${n.notification_id}`}><Eye className="size-4" /> {t("View")}</Link>
                       </Button>
                     </TableCell>
                   </TableRow>

@@ -10,13 +10,13 @@ export function LanguageMenu() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
-        aria-label="Language"
+        aria-label={t("Language")}
         className="rounded-md border border-border p-2 hover:bg-muted"
       >
         <Globe className="size-4" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="max-h-96 w-56 overflow-y-auto">
-        <DropdownMenuLabel>Language</DropdownMenuLabel>
+        <DropdownMenuLabel>{t("Language")}</DropdownMenuLabel>
         {LANGUAGE_CODES.map((code) => {
           const info = LANGUAGES[code as Language]
           return (

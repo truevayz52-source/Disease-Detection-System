@@ -23,7 +23,7 @@ export function translateConfigured() {
   return Boolean(process.env.GEMINI_API_KEY)
 }
 
-const model = () => process.env.TRANSLATE_MODEL ?? "gemini-1.5-flash"
+const model = () => process.env.TRANSLATE_MODEL ?? "gemini-3.1-flash-lite"
 
 // Small in-memory LRU — identical passages are not re-sent to the provider.
 const cache = new Map<string, string>()

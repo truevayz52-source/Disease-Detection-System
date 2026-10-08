@@ -63,23 +63,30 @@ class SyncService extends ChangeNotifier {
 
   Future<void> start() async {
     await refreshPending();
-    try {
-      _sub = Connectivity().onConnectivityChanged.listen((results) {
-        final hasLink = results.any((r) => r != ConnectivityResult.none);
-        if (!hasLink) {
-          setReachable(false);
-        } else {
-          // Link returned — but the server may still be unreachable
-          // (different network). Probe instead of assuming online.
-          probe();
-        }
-      });
-      final initial = await Connectivity().checkConnectivity();
-      if (!initial.any((r) => r != ConnectivityResult.none)) {
+    void track(List<ConnectivityResult> results) {
+      final hasLink = results.any((r) => r != ConnectivityResult.none);
+      // Slow links get longer timeouts in ApiClient — cellular and VPN
+      // count; wifi/ethernet/other are treated as fast.
+      _api.networkSlow =
+          hasLink &&
+          !results.any(
+            (r) =>
+                r == ConnectivityResult.wifi ||
+                r == ConnectivityResult.ethernet ||
+                r == ConnectivityResult.other,
+          );
+      if (!hasLink) {
         setReachable(false);
       } else {
-        unawaited(probe());
+        // Link returned — but the server may still be unreachable
+        // (different network). Probe instead of assuming online.
+        probe();
       }
+    }
+
+    try {
+      _sub = Connectivity().onConnectivityChanged.listen(track);
+      track(await Connectivity().checkConnectivity());
     } catch (_) {
       // Plugin unavailable (e.g. widget tests) — probe decides.
       unawaited(probe());

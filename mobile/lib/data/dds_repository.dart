@@ -144,6 +144,22 @@ class DdsRepository {
   Future<void> finalizeAutopsy(String id) =>
       _api.patch('/autopsies/$id/finalize');
 
+  // ── AI (guarded Gemini via /api/ai — server re-masks before dispatch) ──────
+
+  /// Text must already be masked by the caller (deidentify.dart) — this repo
+  /// method just forwards; the server privacy gate verifies masking again.
+  Future<String> aiSummarize(
+    String maskedText,
+    List<String> pii,
+    String lang,
+  ) async {
+    final res = await _api.post(
+      '/ai/summarize',
+      body: {'text': maskedText, 'pii': pii, 'lang': lang},
+    );
+    return res['summary']?.toString() ?? '';
+  }
+
   // ── Admin ────────────────────────────────────────────────────────────────
 
   Future<List<UserRow>> users() async {
@@ -165,6 +181,32 @@ class DdsRepository {
 
   Future<Map<String, dynamic>> auditVerify() async =>
       await _api.get('/audit/verify');
+
+  /// Admin system settings (`GET /settings/all`) — raw rows, values are
+  /// JSON-encoded strings.
+  Future<List<Map<String, dynamic>>> systemSettings() async {
+    final res = await _api.get('/settings/all');
+    return ((res['items'] as List?) ?? [])
+        .map((e) => (e as Map).cast<String, dynamic>())
+        .toList();
+  }
+
+  /// Admin integration availability (`GET /integrations/status`) — service
+  /// name → status string map.
+  Future<Map<String, dynamic>> integrationsStatus() async =>
+      ((await _api.get('/integrations/status')) as Map).cast<String, dynamic>();
+
+  /// `PATCH /settings/:key` — keys are whitelisted server-side
+  /// (site_notice, maintenance_message, gps_retention_days).
+  Future<void> saveSetting(String key, Object value) =>
+      _api.patch('/settings/$key', body: {'value': value});
+
+  /// `POST /regional/push` — pushes the district-level mortality aggregate
+  /// to the configured exchange targets (DHIS2 / OpenHIM). Returns the
+  /// per-target result list.
+  Future<Map<String, dynamic>> regionalPush({int days = 30}) async =>
+      ((await _api.post('/regional/push', body: {'days': days})) as Map)
+          .cast<String, dynamic>();
 }
 
 class NotificationDetail {

@@ -81,7 +81,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   @override
   Widget build(BuildContext context) {
     return AppScaffold(
-      title: 'Outbreak Analytics',
+      title: tr('Outbreak Analytics'),
       actions: [IconButton(icon: const Icon(Icons.refresh), onPressed: _load)],
       child: _trends == null && _error == null
           ? loadingOr(null)
@@ -98,7 +98,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                         child: Text(
                           tr('Engine: {e}', {
                             'e': _engine == 'python-sklearn'
-                                ? 'Python scikit-learn'
+                                ? tr('Python scikit-learn')
                                 : tr('Node fallback'),
                           }),
                           style: const TextStyle(
@@ -125,8 +125,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                   ),
                   const SizedBox(height: 16),
                   SectionCard(
-                    title: 'Weekly mortality trend',
-                    subtitle: '12-week totals with 4-week forecast',
+                    title: tr('Weekly mortality trend'),
+                    subtitle: tr('12-week totals with 4-week forecast'),
                     child: SizedBox(
                       height: 220,
                       child: _WeeklyChart(trends: _trends!),
@@ -134,11 +134,11 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                   ),
                   const SizedBox(height: 16),
                   SectionCard(
-                    title: 'Detected clusters',
-                    subtitle: 'Spatial groupings in the last 90 days',
+                    title: tr('Detected clusters'),
+                    subtitle: tr('Spatial groupings in the last 90 days'),
                     padding: EdgeInsets.zero,
                     child: _clusters.isEmpty
-                        ? const EmptyState('No clusters detected.')
+                        ? EmptyState(tr('No clusters detected.'))
                         : Column(
                             children: [
                               for (final c in _clusters)
@@ -203,7 +203,7 @@ class _WeeklyChart extends StatelessWidget {
           ),
         )
         .toList();
-    if (series.isEmpty) return const EmptyState('No trend data');
+    if (series.isEmpty) return EmptyState(tr('No trend data'));
 
     final all = [...series, ...forecast];
     return LineChart(

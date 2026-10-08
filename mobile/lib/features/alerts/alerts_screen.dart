@@ -92,7 +92,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
     ].contains(role);
 
     return AppScaffold(
-      title: 'Alerts',
+      title: tr('Alerts'),
       actions: [IconButton(icon: const Icon(Icons.refresh), onPressed: _load)],
       child: RefreshIndicator(
         onRefresh: _load,
@@ -105,31 +105,31 @@ class _AlertsScreenState extends State<AlertsScreen> {
                 scrollDirection: Axis.horizontal,
                 children: [
                   _mini(
-                    'Active',
+                    tr('Active'),
                     _stats.active,
                     Icons.warning_amber,
                     DdsColors.accentRed,
                   ),
                   _mini(
-                    'Critical',
+                    tr('Critical'),
                     _stats.critical,
                     Icons.error_outline,
                     DdsColors.severityCritical,
                   ),
                   _mini(
-                    'High risk',
+                    tr('High risk'),
                     _stats.highRisk,
                     Icons.priority_high,
                     DdsColors.severityHigh,
                   ),
                   _mini(
-                    'Active cases',
+                    tr('Active cases'),
                     _stats.activeCases,
                     Icons.coronavirus_outlined,
                     DdsColors.accentPurple,
                   ),
                   _mini(
-                    'Resolved',
+                    tr('Resolved'),
                     _stats.resolved,
                     Icons.check_circle_outline,
                     DdsColors.success,
@@ -164,7 +164,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
                           ? tr('All types')
                           : t == 'outbreak'
                           ? tr('Outbreak')
-                          : 'MPDSR',
+                          : tr('MPDSR'),
                     ),
                     selected: _type == t,
                     onSelected: (_) {
@@ -180,7 +180,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
             else if (_error != null)
               loadingOr(_error, onRetry: _load)
             else if (_items.isEmpty)
-              const Card(child: EmptyState('No alerts match your filters.'))
+              Card(child: EmptyState(tr('No alerts match your filters.')))
             else
               for (final a in _items) _alertCard(a, canResolve),
             const SizedBox(height: 40),
@@ -243,7 +243,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
                   ),
                   child: Text(
                     a.alertType == 'mpdsr'
-                        ? 'MPDSR'
+                        ? tr('MPDSR')
                         : tr('Risk {n}', {'n': a.riskScore.toStringAsFixed(0)}),
                     style: TextStyle(
                       fontSize: 11,

@@ -23,3 +23,9 @@ analytics/*.log
 analytics/test-audio.wav
 e2e/test-results/
 e2e/playwright-report/
+
+# i18n build cache (provider responses)
+i18n/.cache/
+
+__pycache__/
+*.pyc

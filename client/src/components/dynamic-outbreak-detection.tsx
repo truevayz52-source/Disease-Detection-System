@@ -39,7 +39,7 @@ export function DynamicOutbreakDetection() {const{t}=usePreferences();
       <CardContent className="space-y-4">
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <Label>District</Label>
+            <Label>{t("District")}</Label>
             <Input value={district} onChange={(e) => setDistrict(e.target.value)} placeholder={t("Enter district")} />
           </div>
           <div>

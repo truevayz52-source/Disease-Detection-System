@@ -13,7 +13,8 @@ import { usePreferences } from "@/lib/preferences"
  * onText was confirmed by the service's repeated-window decode — there is no
  * draft tier. Ndebele is unsupported by Whisper and gets manual guidance.
  */
-export function AudioTranscription({ notificationId, language, onText }: { notificationId: string; language: string; onText: (text: string) => void }) {const{t}=usePreferences();
+export function AudioTranscription({ notificationId, language, onText }: { notificationId: string; language: string; onText: (text: string) => void }) {
+  const { t } = usePreferences()
   const status = useSWR<{ configured: boolean }>("/voice/status", api)
   const [recording, setRecording] = useState(false)
   const [pending, setPending] = useState("")
@@ -119,7 +120,8 @@ export function AudioTranscription({ notificationId, language, onText }: { notif
   )
 }
 
-export function PathologyInference({ imageId }: { imageId: string }) {const{t}=usePreferences();
+export function PathologyInference({ imageId }: { imageId: string }) {
+  const { t } = usePreferences()
   const { data, error } = useSWR<any>(`/ai/pathology/results/${imageId}`, api)
 
   // AI pathology analysis is not yet implemented
@@ -141,7 +143,8 @@ export function PathologyInference({ imageId }: { imageId: string }) {const{t}=u
   )
 }
 
-export function WhoLookup() {const{t}=usePreferences();
+export function WhoLookup() {
+  const { t } = usePreferences()
   const [q, setQ] = useState(""), [items, setItems] = useState<any[]>([])
   return <Panel title={t("WHO ICD-11 reference")}><p className="text-sm text-muted-foreground">{t("Reference lookup in the configured WHO release. Case coding continues to use the local catalog.")}</p><Field label={t("Search ICD-11")} value={q} onChange={setQ} /><Action variant="outline" onClick={async () => { setItems([]); const result = await api(`/icd-codes/who?q=${encodeURIComponent(q)}`); setItems(result.items) }}>{t("Search WHO catalog")}</Action>{items.length > 0 && <Rows items={items} columns={[["code", "Code"], ["title", "Description"], ["release", "Release"]]} />}</Panel>
 }

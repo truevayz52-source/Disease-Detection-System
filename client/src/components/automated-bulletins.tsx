@@ -55,9 +55,9 @@ export function AutomatedBulletins() {
               onChange={(e) => setType(e.target.value)}
               className="w-full mt-1 rounded-md border p-2"
             >
-              <option value="daily">Daily</option>
-              <option value="weekly">Weekly</option>
-              <option value="monthly">Monthly</option>
+              <option value="daily">{t("Daily")}</option>
+              <option value="weekly">{t("Weekly")}</option>
+              <option value="monthly">{t("Monthly")}</option>
             </select>
           </div>
           <div>

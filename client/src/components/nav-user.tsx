@@ -6,7 +6,7 @@ import { useAuth, type Role } from "@/lib/auth"
 import { ROLE_LABELS } from "@/lib/roles"
 import { usePreferences } from "@/lib/preferences"
 
-function initials(name: string) {const{t}=usePreferences();
+function initials(name: string) {
   return name
     .split(" ")
     .map((p) => p[0])
@@ -15,7 +15,8 @@ function initials(name: string) {const{t}=usePreferences();
     .toUpperCase()
 }
 
-export function NavUser({ user }: { user: { name: string; email: string; role: Role } }) {const{t}=usePreferences();
+export function NavUser({ user }: { user: { name: string; email: string; role: Role } }) {
+  const { t } = usePreferences()
   const navigate = useNavigate()
   const { signOut } = useAuth()
 
@@ -39,7 +40,7 @@ export function NavUser({ user }: { user: { name: string; email: string; role: R
         <div className="grid min-w-0 flex-1 text-left leading-tight group-data-[collapsible=icon]:hidden">
           <span className="truncate text-sm font-semibold text-white">{user.name}</span>
           <span className="truncate text-[10px] font-semibold uppercase tracking-wider text-white/60">
-            {ROLE_LABELS[user.role]}
+            {t(ROLE_LABELS[user.role] ?? user.role)}
           </span>
         </div>
       </Link>

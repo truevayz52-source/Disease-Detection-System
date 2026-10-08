@@ -139,14 +139,14 @@ export default function SignalRegistryPage() {const{t}=usePreferences();
           <Select value={status} onValueChange={(v) => setStatus(v ?? "new")}>
             <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="new">New</SelectItem>
-              <SelectItem value="triaged">Triaged</SelectItem>
-              <SelectItem value="investigating">Investigating</SelectItem>
-              <SelectItem value="resolved">Resolved</SelectItem>
-              <SelectItem value="dismissed">Dismissed</SelectItem>
+              <SelectItem value="new">{t("New")}</SelectItem>
+              <SelectItem value="triaged">{t("Triaged")}</SelectItem>
+              <SelectItem value="investigating">{t("Investigating")}</SelectItem>
+              <SelectItem value="resolved">{t("Resolved")}</SelectItem>
+              <SelectItem value="dismissed">{t("Dismissed")}</SelectItem>
             </SelectContent>
           </Select>
-          <Button variant="outline" size="sm" onClick={() => mutate()}><RefreshCw className="size-3.5" /> Refresh</Button>
+          <Button variant="outline" size="sm" onClick={() => mutate()}><RefreshCw className="size-3.5" /> {t("Refresh")}</Button>
           <p className="text-sm text-muted-foreground">{data?.items.length ?? 0} signal(s)</p>
           <div className="ml-auto">
             <Button size="sm" onClick={() => setOpen(true)}><Plus className="size-4" /> {t("New signal")}</Button>
@@ -167,7 +167,7 @@ export default function SignalRegistryPage() {const{t}=usePreferences();
                   </div>
                   <div className="flex items-center gap-2">
                     {s.risk_score != null && <Badge variant={riskVariant(s.risk_score)}>Risk {s.risk_score}</Badge>}
-                    {Boolean(s.overdue) && <Badge variant="destructive">Overdue</Badge>}
+                    {Boolean(s.overdue) && <Badge variant="destructive">{t("Overdue")}</Badge>}
                     <Badge variant={SEVERITY_VARIANT[s.severity] ?? "outline"}>{s.severity}</Badge>
                     <Badge variant="outline">{s.workflow_stage}</Badge>
                   </div>
@@ -187,16 +187,16 @@ export default function SignalRegistryPage() {const{t}=usePreferences();
                 {canTriage && (
                   <div className="flex flex-wrap gap-2 pt-1">
                     {s.workflow_stage === "captured" && (
-                      <Button size="sm" variant="outline" onClick={() => transition(s.signal_id, "verified", "triaged")}>Verify</Button>
+                      <Button size="sm" variant="outline" onClick={() => transition(s.signal_id, "verified", "triaged")}>{t("Verify")}</Button>
                     )}
                     {s.workflow_stage === "verified" && (
-                      <Button size="sm" variant="outline" onClick={() => transition(s.signal_id, "escalated", "investigating")}>Escalate</Button>
+                      <Button size="sm" variant="outline" onClick={() => transition(s.signal_id, "escalated", "investigating")}>{t("Escalate")}</Button>
                     )}
                     {s.workflow_stage === "escalated" && (
                       <Button size="sm" variant="outline" onClick={() => transition(s.signal_id, "closed", "resolved")}>{t("Close as resolved")}</Button>
                     )}
                     {s.status !== "dismissed" && s.status !== "resolved" && (
-                      <Button size="sm" variant="ghost" onClick={() => transition(s.signal_id, "closed", "dismissed")}>Dismiss</Button>
+                      <Button size="sm" variant="ghost" onClick={() => transition(s.signal_id, "closed", "dismissed")}>{t("Dismiss")}</Button>
                     )}
                     {(playbooks?.items?.length ?? 0) > 0 && (
                       <Select onValueChange={(v) => { const id = v as string; if (id) attachPlaybook(s.signal_id, id) }}>
@@ -230,7 +230,7 @@ export default function SignalRegistryPage() {const{t}=usePreferences();
           <DialogHeader><DialogTitle>{t("Capture signal")}</DialogTitle></DialogHeader>
           <div className="grid gap-4 py-2">
             <div className="space-y-2">
-              <Label>Title</Label>
+              <Label>{t("Title")}</Label>
               <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -239,9 +239,9 @@ export default function SignalRegistryPage() {const{t}=usePreferences();
                 <Select value={form.signalType} onValueChange={(v) => setForm({ ...form, signalType: v ?? "rumour" })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="rumour">Rumour</SelectItem>
+                    <SelectItem value="rumour">{t("Rumour")}</SelectItem>
                     <SelectItem value="outbreak_report">{t("Outbreak report")}</SelectItem>
-                    <SelectItem value="misinformation">Misinformation</SelectItem>
+                    <SelectItem value="misinformation">{t("Misinformation")}</SelectItem>
                     <SelectItem value="community_alert">{t("Community alert")}</SelectItem>
                   </SelectContent>
                 </Select>
@@ -251,10 +251,10 @@ export default function SignalRegistryPage() {const{t}=usePreferences();
                 <Select value={form.sourceChannel} onValueChange={(v) => setForm({ ...form, sourceChannel: v ?? "community" })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="community">Community</SelectItem>
+                    <SelectItem value="community">{t("Community")}</SelectItem>
                     <SelectItem value="vhw">{t("Village Health Worker")}</SelectItem>
-                    <SelectItem value="facility">Facility</SelectItem>
-                    <SelectItem value="media">Media</SelectItem>
+                    <SelectItem value="facility">{t("Facility")}</SelectItem>
+                    <SelectItem value="media">{t("Media")}</SelectItem>
                     <SelectItem value="offline">{t("Offline capture")}</SelectItem>
                   </SelectContent>
                 </Select>
@@ -262,34 +262,34 @@ export default function SignalRegistryPage() {const{t}=usePreferences();
             </div>
             <div className="grid grid-cols-3 gap-4">
               <div className="space-y-2">
-                <Label>Province</Label>
+                <Label>{t("Province")}</Label>
                 <Input value={form.province} onChange={(e) => setForm({ ...form, province: e.target.value })} />
               </div>
               <div className="space-y-2">
-                <Label>District</Label>
+                <Label>{t("District")}</Label>
                 <Input value={form.district} onChange={(e) => setForm({ ...form, district: e.target.value })} />
               </div>
               <div className="space-y-2">
-                <Label>Severity</Label>
+                <Label>{t("Severity")}</Label>
                 <Select value={form.severity} onValueChange={(v) => setForm({ ...form, severity: v ?? "medium" })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="low">Low</SelectItem>
-                    <SelectItem value="medium">Medium</SelectItem>
-                    <SelectItem value="high">High</SelectItem>
-                    <SelectItem value="critical">Critical</SelectItem>
+                    <SelectItem value="low">{t("Low")}</SelectItem>
+                    <SelectItem value="medium">{t("Medium")}</SelectItem>
+                    <SelectItem value="high">{t("High")}</SelectItem>
+                    <SelectItem value="critical">{t("Critical")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
             <div className="space-y-2">
-              <Label>Description</Label>
+              <Label>{t("Description")}</Label>
               <Textarea rows={3} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button disabled={saving || form.title.trim().length < 2} onClick={createSignal}>Capture</Button>
+            <Button variant="outline" onClick={() => setOpen(false)}>{t("Cancel")}</Button>
+            <Button disabled={saving || form.title.trim().length < 2} onClick={createSignal}>{t("Capture")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

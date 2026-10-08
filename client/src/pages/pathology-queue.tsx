@@ -104,7 +104,7 @@ export default function PathologyQueuePage() {const{t}=usePreferences();
               <SelectItem value="newest">{t("Newest first")}</SelectItem>
             </SelectContent>
           </Select>
-          <Button size="sm" variant="ghost" title="Refresh" onClick={() => mutate()}><RefreshCw className={`size-4 ${isValidating ? "animate-spin" : ""}`} /></Button>
+          <Button size="sm" variant="ghost" title={t("Refresh")} onClick={() => mutate()}><RefreshCw className={`size-4 ${isValidating ? "animate-spin" : ""}`} /></Button>
           <p className="ml-auto text-sm text-muted-foreground">{items.length} of {queue.length} case{queue.length === 1 ? "" : "s"}</p>
         </div>
 
@@ -114,13 +114,13 @@ export default function PathologyQueuePage() {const{t}=usePreferences();
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Patient</TableHead>
-                  <TableHead>ICD</TableHead>
-                  <TableHead>Facility</TableHead>
+                  <TableHead>{t("Patient")}</TableHead>
+                  <TableHead>{t("ICD")}</TableHead>
+                  <TableHead>{t("Facility")}</TableHead>
                   <TableHead>{t("Date of death")}</TableHead>
-                  <TableHead>Waiting</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead>{t("Waiting")}</TableHead>
+                  <TableHead>{t("Status")}</TableHead>
+                  <TableHead className="text-right">{t("Actions")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -130,7 +130,7 @@ export default function PathologyQueuePage() {const{t}=usePreferences();
                     <TableRow key={n.notification_id}>
                       <TableCell className="font-medium">
                         {n.patient_name}
-                        {!!n.is_maternal_perinatal && <Badge variant="destructive" className="ml-2 text-[10px]">MPDSR</Badge>}
+                        {!!n.is_maternal_perinatal && <Badge variant="destructive" className="ml-2 text-[10px]">{t("MPDSR")}</Badge>}
                       </TableCell>
                       <TableCell>
                         <span className="tabular-nums font-medium">{n.preliminary_icd_code}</span>
@@ -147,7 +147,7 @@ export default function PathologyQueuePage() {const{t}=usePreferences();
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <Badge variant={STATUS_VARIANTS[n.status] ?? "secondary"}>{STATUS_LABELS[n.status] ?? n.status}</Badge>
+                        <Badge variant={STATUS_VARIANTS[n.status] ?? "secondary"}>{t(STATUS_LABELS[n.status] ?? n.status)}</Badge>
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1.5">
@@ -155,7 +155,7 @@ export default function PathologyQueuePage() {const{t}=usePreferences();
                             <Link to={`/notifications/${n.notification_id}`}><Eye className="size-3.5" /></Link>
                           </Button>
                           <Button size="sm" asChild>
-                            <Link to={`/pathology/review/${n.notification_id}`}>Review</Link>
+                            <Link to={`/pathology/review/${n.notification_id}`}>{t("Review")}</Link>
                           </Button>
                         </div>
                       </TableCell>

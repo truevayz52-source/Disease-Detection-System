@@ -16,11 +16,12 @@ class LanguageMenuButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final lang = context.watch<LanguageProvider>();
     return PopupMenuButton<String>(
-      icon: const Icon(Icons.language_outlined),
+      icon: const Icon(Icons.translate),
       tooltip: context.tr('Language'),
-      onSelected: (code) => context
-          .read<LanguageProvider>()
-          .setLanguage(code, api: context.read<ApiClient>()),
+      onSelected: (code) => context.read<LanguageProvider>().setLanguage(
+        code,
+        api: context.read<ApiClient>(),
+      ),
       itemBuilder: (context) => [
         for (final l in kLanguages)
           PopupMenuItem<String>(

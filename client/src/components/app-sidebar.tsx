@@ -141,7 +141,7 @@ export function AppSidebar({
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel className="text-xs font-semibold tracking-wider uppercase text-white/50 px-3">Workspace</SidebarGroupLabel>
+          <SidebarGroupLabel className="text-xs font-semibold tracking-wider uppercase text-white/50 px-3">{t("Workspace")}</SidebarGroupLabel>
           <SidebarGroupContent className="pt-1">
             <SidebarMenu className="gap-1 px-1">
               {items.map((item) => {
@@ -161,7 +161,7 @@ export function AppSidebar({
                         </Link>
                       }
                       isActive={active}
-                      tooltip={item.label}
+                      tooltip={t(item.label)}
                     />
                   </SidebarMenuItem>
                 )

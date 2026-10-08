@@ -42,7 +42,7 @@ class _OfflineSyncScreenState extends State<OfflineSyncScreen> {
   Widget build(BuildContext context) {
     final sync = context.watch<SyncService>();
     return AppScaffold(
-      title: 'Offline Sync',
+      title: tr('Offline Sync'),
       actions: [IconButton(icon: const Icon(Icons.refresh), onPressed: _load)],
       child: _loading
           ? loadingOr(null)
@@ -147,9 +147,9 @@ class _OfflineSyncScreenState extends State<OfflineSyncScreen> {
                     ),
                   ),
                 if (_items.isEmpty)
-                  const Card(
+                  Card(
                     child: EmptyState(
-                      'Nothing queued — all changes are synced.',
+                      tr('Nothing queued — all changes are synced.'),
                     ),
                   )
                 else

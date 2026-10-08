@@ -1,11 +1,19 @@
+// Active UI locale for date/number formatting — pushed by PreferencesProvider
+// whenever the selected language changes. Locales without ICU/CLDR data in the
+// browser (low-resource codes) fall back to the runtime default, which is fine.
+let dateLocale = "en-GB"
+export function setDateLocale(locale: string) {
+  dateLocale = locale
+}
+
 export function fmtDate(d: string | Date | null | undefined) {
   if (!d) return "—"
-  return new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
+  return new Date(d).toLocaleDateString(dateLocale, { day: "2-digit", month: "short", year: "numeric" })
 }
 
 export function fmtDateTime(d: string | Date | null | undefined) {
   if (!d) return "—"
-  return new Date(d).toLocaleString("en-GB", {
+  return new Date(d).toLocaleString(dateLocale, {
     day: "2-digit",
     month: "short",
     year: "numeric",

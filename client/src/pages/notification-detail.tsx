@@ -1,4 +1,5 @@
 import { CommentThread } from "@/components/comment-thread"
+import { AiSummaryBlock } from "@/components/ai-block"
 import { useRef, useState } from "react"
 import { Link, useParams } from "react-router-dom"
 import useSWR from "swr"
@@ -60,8 +61,8 @@ export default function NotificationDetailPage() {const{t}=usePreferences();
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle className="text-base">{n.patient_name}</CardTitle>
                 <div className="flex items-center gap-2">
-                  {!!n.is_maternal_perinatal && <Badge variant="destructive">MPDSR</Badge>}
-                  <Badge variant={STATUS_VARIANTS[n.status] ?? "secondary"}>{STATUS_LABELS[n.status] ?? n.status}</Badge>
+                  {!!n.is_maternal_perinatal && <Badge variant="destructive">{t("MPDSR")}</Badge>}
+                  <Badge variant={STATUS_VARIANTS[n.status] ?? "secondary"}>{t(STATUS_LABELS[n.status] ?? n.status)}</Badge>
                 </div>
               </CardHeader>
               <CardContent>
@@ -70,22 +71,25 @@ export default function NotificationDetailPage() {const{t}=usePreferences();
                   <dd>{n.national_id ?? "—"}</dd>
                   <dt className="text-muted-foreground">{t("Age / Gender")}</dt>
                   <dd>{n.age ?? "—"} / {n.gender}</dd>
-                  <dt className="text-muted-foreground">Address</dt>
+                  <dt className="text-muted-foreground">{t("Address")}</dt>
                   <dd>{n.residential_address ?? "—"}</dd>
                   <dt className="text-muted-foreground">{t("Date of death")}</dt>
                   <dd>{fmtDateTime(n.date_of_death)}</dd>
                   <dt className="text-muted-foreground">{t("Preliminary ICD")}</dt>
                   <dd>{n.preliminary_icd_code} — {n.icd_description}</dd>
-                  <dt className="text-muted-foreground">Category</dt>
+                  <dt className="text-muted-foreground">{t("Category")}</dt>
                   <dd>{n.disease_category}</dd>
-                  <dt className="text-muted-foreground">Facility</dt>
+                  <dt className="text-muted-foreground">{t("Facility")}</dt>
                   <dd>{n.facility_name}, {n.district}</dd>
                   <dt className="text-muted-foreground">{t("Reported by")}</dt>
                   <dd>{n.reported_by_name} · {fmtDate(n.created_at)}</dd>
                   {n.clinical_summary && (
                     <>
                       <dt className="text-muted-foreground">{t("Clinical summary")}</dt>
-                      <dd className="sm:col-span-1 whitespace-pre-wrap"><TranslatedBlock text={n.clinical_summary} pii={[n.patient_name, n.national_id, n.residential_address, n.facility_name, n.reported_by_name]} /></dd>
+                      <dd className="sm:col-span-1 whitespace-pre-wrap">
+                        <TranslatedBlock text={n.clinical_summary} pii={[n.patient_name, n.national_id, n.residential_address, n.facility_name, n.reported_by_name]} />
+                        <AiSummaryBlock className="mt-2" text={n.clinical_summary} pii={[n.patient_name, n.national_id, n.residential_address, n.facility_name, n.reported_by_name]} />
+                      </dd>
                     </>
                   )}
                 </dl>
@@ -140,13 +144,13 @@ export default function NotificationDetailPage() {const{t}=usePreferences();
                 {data?.autopsy ? (
                   <>
                     <div className="flex items-center justify-between">
-                      <span className="text-muted-foreground">Status</span>
+                      <span className="text-muted-foreground">{t("Status")}</span>
                       <Badge variant={STATUS_VARIANTS[data.autopsy.status] ?? "secondary"}>
-                        {STATUS_LABELS[data.autopsy.status] ?? data.autopsy.status}
+                        {t(STATUS_LABELS[data.autopsy.status] ?? data.autopsy.status)}
                       </Badge>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-muted-foreground">Pathologist</span>
+                      <span className="text-muted-foreground">{t("Pathologist")}</span>
                       <span>{data.autopsy.pathologist_name}</span>
                     </div>
                     {data.autopsy.final_icd_code && (

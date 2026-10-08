@@ -54,7 +54,7 @@ export default function AuditPage() {const{t}=usePreferences();
         <div className="flex flex-wrap items-center gap-3">
           <Input className="w-52" placeholder={t("Filter by action (e.g. login)")} value={actionFilter} onChange={(e) => { setActionFilter(e.target.value); setPage(1) }} />
           <Input className="w-52" placeholder={t("Filter by entity (e.g. notification)")} value={entityFilter} onChange={(e) => { setEntityFilter(e.target.value); setPage(1) }} />
-          <Button variant="outline" size="sm" onClick={() => mutate()}><RefreshCw className="size-3.5" /> Refresh</Button>
+          <Button variant="outline" size="sm" onClick={() => mutate()}><RefreshCw className="size-3.5" /> {t("Refresh")}</Button>
         </div>
 
         <Card className="shadow-lg">
@@ -62,12 +62,12 @@ export default function AuditPage() {const{t}=usePreferences();
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Time</TableHead>
-                  <TableHead>User</TableHead>
-                  <TableHead>Action</TableHead>
-                  <TableHead>Entity</TableHead>
-                  <TableHead>IP</TableHead>
-                  <TableHead>Hash</TableHead>
+                  <TableHead>{t("Time")}</TableHead>
+                  <TableHead>{t("User")}</TableHead>
+                  <TableHead>{t("Action")}</TableHead>
+                  <TableHead>{t("Entity")}</TableHead>
+                  <TableHead>{t("IP")}</TableHead>
+                  <TableHead>{t("Hash")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>

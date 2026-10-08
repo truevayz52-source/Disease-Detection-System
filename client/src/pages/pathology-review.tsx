@@ -194,19 +194,19 @@ export default function PathologyReviewPage() {const{t}=usePreferences();
               </CardHeader>
               <CardContent>
                 <dl className="grid gap-x-4 gap-y-2 text-sm sm:grid-cols-2">
-                  <dt className="text-muted-foreground">Patient</dt>
-                  <dd>{n.patient_name}{!!n.is_maternal_perinatal && <Badge variant="destructive" className="ml-2 text-[10px]">MPDSR</Badge>}</dd>
+                  <dt className="text-muted-foreground">{t("Patient")}</dt>
+                  <dd>{n.patient_name}{!!n.is_maternal_perinatal && <Badge variant="destructive" className="ml-2 text-[10px]">{t("MPDSR")}</Badge>}</dd>
                   <dt className="text-muted-foreground">{t("Age / Gender")}</dt>
                   <dd>{n.age ?? "—"} / {n.gender}</dd>
                   <dt className="text-muted-foreground">{t("Date of death")}</dt>
                   <dd>{fmtDateTime(n.date_of_death)}</dd>
                   <dt className="text-muted-foreground">{t("Preliminary ICD")}</dt>
                   <dd>{n.preliminary_icd_code} — {n.icd_description}</dd>
-                  <dt className="text-muted-foreground">Facility</dt>
+                  <dt className="text-muted-foreground">{t("Facility")}</dt>
                   <dd>{n.facility_name}, {n.district}</dd>
                   {n.clinical_summary && (
                     <>
-                      <dt className="text-muted-foreground">Summary</dt>
+                      <dt className="text-muted-foreground">{t("Summary")}</dt>
                       <dd className="whitespace-pre-wrap"><TranslatedBlock text={n.clinical_summary} pii={[n.patient_name, n.national_id, n.facility_name]} /></dd>
                     </>
                   )}

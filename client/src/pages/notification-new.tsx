@@ -97,7 +97,7 @@ function IcdPicker({ value, onPick }: { value: string; onPick: (code: string, de
               >
                 <span className="font-mono text-xs font-semibold">{c.icd_code}</span>
                 <span className="flex-1">{c.description}</span>
-                {!!c.is_notifiable && <span className="text-[10px] text-destructive">notifiable</span>}
+                {!!c.is_notifiable && <span className="text-[10px] text-destructive">{t("notifiable")}</span>}
               </button>
             </li>
           ))}
@@ -225,17 +225,17 @@ export default function NotificationNewPage() {const{t}=usePreferences();
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="age">Age</Label>
+                  <Label htmlFor="age">{t("Age")}</Label>
                   <Input id="age" type="number" min={0} max={150} value={form.age} onChange={(e) => set("age", e.target.value)} />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="gender">{t("Gender *")}</Label>
                   <Select value={form.gender} onValueChange={(v) => set("gender", v ?? "")}>
-                    <SelectTrigger id="gender"><SelectValue placeholder="Select" /></SelectTrigger>
+                    <SelectTrigger id="gender"><SelectValue placeholder={t("Select")} /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="male">Male</SelectItem>
-                      <SelectItem value="female">Female</SelectItem>
-                      <SelectItem value="other">Other</SelectItem>
+                      <SelectItem value="male">{t("Male")}</SelectItem>
+                      <SelectItem value="female">{t("Female")}</SelectItem>
+                      <SelectItem value="other">{t("Other")}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -324,25 +324,25 @@ export default function NotificationNewPage() {const{t}=usePreferences();
             </CardHeader>
             <CardContent>
               <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
-                <dt className="text-muted-foreground">Patient</dt>
+                <dt className="text-muted-foreground">{t("Patient")}</dt>
                 <dd>{form.fullName}</dd>
                 <dt className="text-muted-foreground">{t("National ID")}</dt>
                 <dd>{form.nationalId || "—"}</dd>
                 <dt className="text-muted-foreground">{t("Age / Gender")}</dt>
                 <dd>{form.age || "—"} / {form.gender}</dd>
-                <dt className="text-muted-foreground">Address</dt>
+                <dt className="text-muted-foreground">{t("Address")}</dt>
                 <dd>{form.residentialAddress || "—"}</dd>
-                <dt className="text-muted-foreground">Facility</dt>
+                <dt className="text-muted-foreground">{t("Facility")}</dt>
                 <dd>{facilities?.items.find((f) => f.facility_id === form.facilityId)?.facility_name ?? form.facilityId}</dd>
                 <dt className="text-muted-foreground">{t("Date of death")}</dt>
                 <dd>{form.dateOfDeath?.replace("T", " ")}</dd>
                 <dt className="text-muted-foreground">{t("Preliminary ICD")}</dt>
                 <dd>{form.icdCode} — {icdDesc}</dd>
-                <dt className="text-muted-foreground">MPDSR</dt>
+                <dt className="text-muted-foreground">{t("MPDSR")}</dt>
                 <dd>{form.isMaternalPerinatal ? "Yes — alert will be raised" : "No"}</dd>
                 {form.clinicalSummary && (
                   <>
-                    <dt className="text-muted-foreground">Summary</dt>
+                    <dt className="text-muted-foreground">{t("Summary")}</dt>
                     <dd className="sm:col-span-1 whitespace-pre-wrap">{form.clinicalSummary}</dd>
                   </>
                 )}

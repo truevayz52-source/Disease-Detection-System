@@ -71,7 +71,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ].contains(user.role);
 
     return AppScaffold(
-      title: 'Dashboard',
+      title: tr('Dashboard'),
       actions: [
         if (canCreate)
           IconButton(
@@ -158,7 +158,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           : 2;
                       final kpis = [
                         (
-                          'Deaths (7 days)',
+                          tr('Deaths (7 days)'),
                           k?.deathsLast7Days,
                           Icons.monitor_heart_outlined,
                           DdsColors.accentRose,
@@ -169,7 +169,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           false,
                         ),
                         (
-                          'Pending reviews',
+                          tr('Pending reviews'),
                           k?.pendingReviews,
                           Icons.hourglass_top_outlined,
                           DdsColors.accentAmber,
@@ -177,7 +177,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           false,
                         ),
                         (
-                          'Active alerts',
+                          tr('Active alerts'),
                           k?.activeAlerts,
                           Icons.warning_amber_outlined,
                           DdsColors.accentRed,
@@ -185,7 +185,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           (k?.activeAlerts ?? 0) > 0,
                         ),
                         (
-                          'Finalized autopsies',
+                          tr('Finalized autopsies'),
                           k?.finalizedAutopsies,
                           Icons.fact_check_outlined,
                           DdsColors.accentEmerald,
@@ -193,7 +193,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           false,
                         ),
                         (
-                          'MPDSR cases (30d)',
+                          tr('MPDSR cases (30d)'),
                           k?.mpdsrLast30Days,
                           Icons.child_care_outlined,
                           DdsColors.accentPurple,
@@ -204,7 +204,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           false,
                         ),
                         (
-                          'Total notifications',
+                          tr('Total notifications'),
                           k?.totalNotifications,
                           Icons.assignment_outlined,
                           DdsColors.accentBlue,
@@ -241,16 +241,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     builder: (context, c) {
                       final wide = c.maxWidth > 820;
                       final trend = SectionCard(
-                        title: 'Mortality trend — last 30 days',
-                        subtitle: 'Daily notified deaths nationwide',
+                        title: tr('Mortality trend — last 30 days'),
+                        subtitle: tr('Daily notified deaths nationwide'),
                         child: SizedBox(
                           height: 240,
                           child: _TrendChart(points: _data!.daily),
                         ),
                       );
                       final donut = SectionCard(
-                        title: 'Notification status',
-                        subtitle: 'Workflow distribution',
+                        title: tr('Notification status'),
+                        subtitle: tr('Workflow distribution'),
                         child: SizedBox(
                           height: 240,
                           child: _StatusDonut(points: _data!.byStatus),
@@ -277,16 +277,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     builder: (context, c) {
                       final wide = c.maxWidth > 820;
                       final catDonut = SectionCard(
-                        title: 'Deaths by category',
-                        subtitle: '90-day share of disease categories',
+                        title: tr('Deaths by category'),
+                        subtitle: tr('90-day share of disease categories'),
                         child: SizedBox(
                           height: 240,
                           child: _CategoryDonut(points: _data!.byCategory),
                         ),
                       );
                       final bars = SectionCard(
-                        title: 'Deaths by province',
-                        subtitle: '90-day distribution across the 10 provinces',
+                        title: tr('Deaths by province'),
+                        subtitle: tr(
+                          '90-day distribution across the 10 provinces',
+                        ),
                         child: SizedBox(
                           height: 240,
                           child: _ProvinceBars(points: _data!.byProvince),
@@ -310,9 +312,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   const SizedBox(height: 16),
                   // Recent notifications
                   SectionCard(
-                    title: 'Recent death notifications',
-                    subtitle:
-                        'Latest clinical records reported across facilities',
+                    title: tr('Recent death notifications'),
+                    subtitle: tr(
+                      'Latest clinical records reported across facilities',
+                    ),
                     trailing: TextButton(
                       onPressed: () => context.go('/notifications'),
                       child: Text(tr('View all')),
@@ -351,15 +354,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             ),
                           ),
                         if (_recent.isEmpty)
-                          const EmptyState('No notifications recorded yet'),
+                          EmptyState(tr('No notifications recorded yet')),
                       ],
                     ),
                   ),
                   const SizedBox(height: 16),
                   // Active alerts
                   SectionCard(
-                    title: 'Active alerts',
-                    subtitle: 'Automated surveillance threshold triggers',
+                    title: tr('Active alerts'),
+                    subtitle: tr('Automated surveillance threshold triggers'),
                     trailing: TextButton(
                       onPressed: () => context.go('/alerts'),
                       child: Text(tr('All alerts')),
@@ -405,7 +408,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             ),
                           ),
                         if (_alerts.isEmpty)
-                          const EmptyState('No active outbreak alerts.'),
+                          EmptyState(tr('No active outbreak alerts.')),
                       ],
                     ),
                   ),
@@ -449,7 +452,7 @@ Widget _alertChip(OutbreakAlert a) => Container(
   ),
   child: Text(
     a.alertType == 'mpdsr'
-        ? 'MPDSR'
+        ? tr('MPDSR')
         : tr('Risk {n}', {'n': a.riskScore.toStringAsFixed(0)}),
     style: TextStyle(
       fontSize: 11,
@@ -469,7 +472,7 @@ class _TrendChart extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (points.isEmpty) {
-      return const EmptyState('No deaths recorded in the last 30 days');
+      return EmptyState(tr('No deaths recorded in the last 30 days'));
     }
     return LineChart(
       LineChartData(
@@ -623,7 +626,7 @@ class _StatusDonut extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (points.isEmpty) return const EmptyState('No data');
+    if (points.isEmpty) return EmptyState(tr('No data'));
     return _donut(
       points,
       [for (final p in points) tr(kStatusLabels[p.label] ?? p.label)],
@@ -638,7 +641,7 @@ class _CategoryDonut extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (points.isEmpty) return const EmptyState('No data');
+    if (points.isEmpty) return EmptyState(tr('No data'));
     return _donut(points, [for (final p in points) tr(p.label)], 0);
   }
 }
@@ -649,7 +652,7 @@ class _ProvinceBars extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (points.isEmpty) return const EmptyState('No data');
+    if (points.isEmpty) return EmptyState(tr('No data'));
     return BarChart(
       BarChartData(
         gridData: FlGridData(

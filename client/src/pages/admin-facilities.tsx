@@ -83,10 +83,10 @@ export default function AdminFacilitiesPage() {const{t}=usePreferences();
 
   return (
     <>
-      <SiteHeader title="Facilities" />
+      <SiteHeader title={t("Facilities")} />
       <div className="space-y-4 p-4 lg:p-6">
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          <StatCard label="Facilities" value={stats.total} icon={Building2} color="blue" compact />
+          <StatCard label={t("Facilities")} value={stats.total} icon={Building2} color="blue" compact />
           <StatCard label={t("Provinces covered")} value={stats.provinces} icon={MapPin} color="emerald" compact />
           <StatCard label={t("Central / provincial")} value={stats.central} icon={ShieldCheck} color="purple" compact />
           <StatCard label={t("District / clinic")} value={stats.clinics} icon={Building2} color="amber" compact />
@@ -103,7 +103,7 @@ export default function AdminFacilitiesPage() {const{t}=usePreferences();
               {(geo?.provinces ?? []).map((p) => <SelectItem key={p.province_id} value={p.province_name}>{p.province_name}</SelectItem>)}
             </SelectContent>
           </Select>
-          <Button variant="outline" size="sm" onClick={() => mutate()}><RefreshCw className="size-3.5" /> Refresh</Button>
+          <Button variant="outline" size="sm" onClick={() => mutate()}><RefreshCw className="size-3.5" /> {t("Refresh")}</Button>
           <p className="ml-auto text-sm text-muted-foreground">{items.length} of {data?.items.length ?? 0} facilities</p>
           <Button size="sm" onClick={() => setOpen(true)}>
             <Building2 className="size-4" /> Add facility
@@ -114,11 +114,11 @@ export default function AdminFacilitiesPage() {const{t}=usePreferences();
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Facility</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>District</TableHead>
-                  <TableHead>Province</TableHead>
-                  <TableHead>Coordinates</TableHead>
+                  <TableHead>{t("Facility")}</TableHead>
+                  <TableHead>{t("Type")}</TableHead>
+                  <TableHead>{t("District")}</TableHead>
+                  <TableHead>{t("Province")}</TableHead>
+                  <TableHead>{t("Coordinates")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -156,7 +156,7 @@ export default function AdminFacilitiesPage() {const{t}=usePreferences();
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Province</Label>
+                <Label>{t("Province")}</Label>
                 <Select value={form.province} onValueChange={(v) => setForm({ ...form, province: v ?? "", district: "" })}>
                   <SelectTrigger><SelectValue placeholder={t("Select province")} /></SelectTrigger>
                   <SelectContent>
@@ -165,7 +165,7 @@ export default function AdminFacilitiesPage() {const{t}=usePreferences();
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>District</Label>
+                <Label>{t("District")}</Label>
                 <Select value={form.district} onValueChange={(v) => setForm({ ...form, district: v ?? "" })} disabled={!form.province}>
                   <SelectTrigger><SelectValue placeholder={t("Select district")} /></SelectTrigger>
                   <SelectContent>
@@ -176,18 +176,18 @@ export default function AdminFacilitiesPage() {const{t}=usePreferences();
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Latitude</Label>
+                <Label>{t("Latitude")}</Label>
                 <Input type="number" step="any" value={form.latitude} onChange={(e) => setForm({ ...form, latitude: e.target.value })} placeholder="-17.82" />
               </div>
               <div className="space-y-2">
-                <Label>Longitude</Label>
+                <Label>{t("Longitude")}</Label>
                 <Input type="number" step="any" value={form.longitude} onChange={(e) => setForm({ ...form, longitude: e.target.value })} placeholder="31.05" />
               </div>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button disabled={saving || !valid} onClick={createFacility}>Register</Button>
+            <Button variant="outline" onClick={() => setOpen(false)}>{t("Cancel")}</Button>
+            <Button disabled={saving || !valid} onClick={createFacility}>{t("Register")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

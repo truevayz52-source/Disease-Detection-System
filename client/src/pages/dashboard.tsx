@@ -71,7 +71,7 @@ export default function DashboardPage() {const{t}=usePreferences();
 
   return (
     <>
-      <SiteHeader title="Dashboard" />
+      <SiteHeader title={t("Dashboard")} />
       <div className="space-y-6 p-4 lg:p-6 bg-card min-h-[calc(100vh-3.5rem)] text-foreground">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between bg-card p-5 rounded-2xl border border-border/90 shadow-lg">
           <div>
@@ -133,7 +133,7 @@ export default function DashboardPage() {const{t}=usePreferences();
                 <PieChart>
                   <DepthDefs id="st" colors={CATEGORY_COLORS} />
                   <Pie
-                    data={(data?.byStatus ?? []).map((s) => ({ ...s, name: STATUS_LABELS[s.status] ?? s.status }))}
+                    data={(data?.byStatus ?? []).map((s) => ({ ...s, name: t(STATUS_LABELS[s.status] ?? s.status) }))}
                     dataKey="count" nameKey="name" innerRadius={52} outerRadius={80} paddingAngle={3} strokeWidth={0}
                     style={{ filter: shadow("st") }}
                   >
@@ -208,11 +208,11 @@ export default function DashboardPage() {const{t}=usePreferences();
               <Table>
                 <TableHeader>
                   <TableRow className="border-b border-sidebar-border">
-                    <TableHead>Patient</TableHead>
+                    <TableHead>{t("Patient")}</TableHead>
                     <TableHead>ICD</TableHead>
-                    <TableHead>Facility</TableHead>
+                    <TableHead>{t("Facility")}</TableHead>
                     <TableHead>{t("Date of death")}</TableHead>
-                    <TableHead>Status</TableHead>
+                    <TableHead>{t("Status")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -231,7 +231,7 @@ export default function DashboardPage() {const{t}=usePreferences();
                       <TableCell className="text-muted-foreground text-xs tabular-nums">{fmtDate(n.date_of_death)}</TableCell>
                       <TableCell>
                         <Badge variant={STATUS_VARIANTS[n.status] ?? "secondary"} className="text-xs font-medium">
-                          {STATUS_LABELS[n.status] ?? n.status}
+                          {t(STATUS_LABELS[n.status] ?? n.status)}
                         </Badge>
                       </TableCell>
                     </TableRow>

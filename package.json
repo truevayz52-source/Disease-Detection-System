@@ -9,13 +9,16 @@
     "dev:client": "pnpm --filter client dev",
     "dev:analytics": "C:\\dds-venv\\Scripts\\python.exe -m uvicorn main:app --host 127.0.0.1 --port 8000 --app-dir analytics",
     "dev:transcription": "C:\\dds-venv\\Scripts\\python.exe -m uvicorn transcription:app --host 127.0.0.1 --port 8001 --app-dir analytics",
+    "dev:pathology": "C:\\dds-venv\\Scripts\\python.exe -m uvicorn pathology:app --host 127.0.0.1 --port 8002 --app-dir analytics",
     "build": "pnpm --filter client build && pnpm --filter server build",
     "seed": "pnpm --filter server seed",
     "test:e2e": "pnpm --filter e2e test",
     "migrate": "pnpm --filter server migrate",
     "i18n:sync": "node scripts/sync-i18n.mjs",
     "i18n:scan": "node scripts/check-i18n.mjs --scan",
-    "i18n:check": "node scripts/check-i18n.mjs"
+    "i18n:check": "node scripts/check-i18n.mjs",
+    "i18n:corpora": "node scripts/fetch-corpora.mjs",
+    "i18n:build": "node scripts/build-dictionaries.mjs"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",

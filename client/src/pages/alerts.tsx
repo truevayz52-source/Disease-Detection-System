@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react"
 import useSWR from "swr"
 import { toast } from "sonner"
-import { Activity, AlertTriangle, CheckCircle2, RefreshCw, Search, Siren, SlidersHorizontal, Users } from "lucide-react"
+import { Activity, AlertTriangle, CheckCircle2, Loader2, RefreshCw, Search, Siren, SlidersHorizontal, Sparkles, Users } from "lucide-react"
 import { SiteHeader } from "@/components/site-header"
 import { StatCard } from "@/components/stat-card"
 import { Badge } from "@/components/ui/badge"
@@ -11,7 +11,8 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { api } from "@/lib/api"
 import { useAuth } from "@/lib/auth"
-import { fmtDateTime, riskVariant } from "@/lib/format"
+import { aiExplainAlert } from "@/lib/ai"
+import { fmtDateTime, riskVariant, STATUS_LABELS } from "@/lib/format"
 import type { OutbreakAlert } from "@/lib/types"
 import { usePreferences } from "@/lib/preferences"
 
@@ -22,6 +23,51 @@ function parseCluster(raw: string | null): Record<string, unknown> | null {
   } catch {
     return null
   }
+}
+
+// Plain-language AI explanation for one alert card — aggregates only.
+function AlertExplain({ alert }: { alert: OutbreakAlert }) {
+  const { language, t } = usePreferences()
+  const [text, setText] = useState<string | null>(null)
+  const [pending, setPending] = useState(false)
+  const cluster = parseCluster(alert.cluster_data)
+
+  async function explain() {
+    setPending(true)
+    try {
+      setText(await aiExplainAlert({
+        alertType: alert.alert_type,
+        disease: alert.disease_category ?? "",
+        district: alert.district ?? "",
+        caseCount: alert.case_count ?? 0,
+        severity: `${alert.risk_score ?? 0}/100`,
+        triggeredAt: alert.triggered_date,
+        windowDays: typeof cluster?.window_hours === "number" ? Math.round(cluster.window_hours / 24) : 0,
+      }, language))
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t("AI explanation failed"))
+    } finally {
+      setPending(false)
+    }
+  }
+
+  return (
+    <div className="space-y-2">
+      <Button type="button" size="sm" variant="outline" onClick={explain} disabled={pending}>
+        {pending ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
+        {pending ? t("Explaining…") : t("Explain with AI")}
+      </Button>
+      {text && (
+        <div className="rounded-md border border-dashed bg-muted/30 p-3">
+          <p className="whitespace-pre-wrap text-sm">{text}</p>
+          <p className="mt-2 flex items-center gap-1 text-[10px] text-muted-foreground">
+            <Sparkles className="size-3" />
+            {t("AI-generated draft — verify against surveillance data")}
+          </p>
+        </div>
+      )}
+    </div>
+  )
 }
 
 export default function AlertsPage() {const{t}=usePreferences();
@@ -77,14 +123,14 @@ export default function AlertsPage() {const{t}=usePreferences();
       value: stats?.active ?? 0,
       icon: Siren,
       color: "blue" as const,
-      sub: `${stats?.resolved ?? 0} resolved · ${stats?.total ?? 0} total`,
+      sub: `${stats?.resolved ?? 0} ${t("resolved")} · ${stats?.total ?? 0} ${t("total")}`,
     },
     {
       label: t("Critical (risk ≥75)"),
       value: stats?.critical ?? 0,
       icon: AlertTriangle,
       color: "red" as const,
-      sub: "active now",
+      sub: t("active now"),
       pulse: (stats?.critical ?? 0) > 0,
     },
     {
@@ -92,14 +138,14 @@ export default function AlertsPage() {const{t}=usePreferences();
       value: stats?.highRisk ?? 0,
       icon: Activity,
       color: "amber" as const,
-      sub: "active now",
+      sub: t("active now"),
     },
     {
       label: t("Cases in active alerts"),
       value: stats?.activeCases ?? 0,
       icon: Users,
       color: "emerald" as const,
-      sub: "across all districts",
+      sub: t("across all districts"),
     },
   ]
 
@@ -115,7 +161,7 @@ export default function AlertsPage() {const{t}=usePreferences();
 
   return (
     <>
-      <SiteHeader title="Alerts" />
+      <SiteHeader title={t("Alerts")} />
       <div className="space-y-4 p-4 lg:p-6">
         {/* Summary strip */}
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -133,17 +179,17 @@ export default function AlertsPage() {const{t}=usePreferences();
           <Select value={status} onValueChange={(v) => setStatus(v ?? "active")}>
             <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="active">Active</SelectItem>
-              <SelectItem value="resolved">Resolved</SelectItem>
-              <SelectItem value="all">All</SelectItem>
+              <SelectItem value="active">{t("Active")}</SelectItem>
+              <SelectItem value="resolved">{t("Resolved")}</SelectItem>
+              <SelectItem value="all">{t("All")}</SelectItem>
             </SelectContent>
           </Select>
           <Select value={type} onValueChange={(v) => setType(v ?? "all")}>
             <SelectTrigger className="w-36"><SelectValue placeholder={t("All types")} /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">{t("All types")}</SelectItem>
-              <SelectItem value="outbreak">Outbreak</SelectItem>
-              <SelectItem value="mpdsr">MPDSR</SelectItem>
+              <SelectItem value="outbreak">{t("Outbreak")}</SelectItem>
+              <SelectItem value="mpdsr">{t("MPDSR")}</SelectItem>
             </SelectContent>
           </Select>
           <Select value={province} onValueChange={(v) => { setProvince(v ?? "all"); setDistrict("all") }}>
@@ -180,10 +226,10 @@ export default function AlertsPage() {const{t}=usePreferences();
               <SelectItem value="cases">{t("Most cases")}</SelectItem>
             </SelectContent>
           </Select>
-          <Button size="sm" variant="ghost" onClick={() => mutate()} title="Refresh">
+          <Button size="sm" variant="ghost" onClick={() => mutate()} title={t("Refresh")}>
             <RefreshCw className={`size-4 ${isValidating ? "animate-spin" : ""}`} />
           </Button>
-          <p className="ml-auto text-sm text-muted-foreground">{items.length} alert(s)</p>
+          <p className="ml-auto text-sm text-muted-foreground">{t("{n} alert(s)", { n: items.length })}</p>
         </div>
 
         <div className="grid gap-4 lg:grid-cols-2">
@@ -213,7 +259,7 @@ export default function AlertsPage() {const{t}=usePreferences();
                       <div>
                         <p className="font-semibold leading-tight">{a.disease_category}</p>
                         <p className="text-sm text-muted-foreground">
-                          {a.district} · {a.case_count} case{a.case_count === 1 ? "" : "s"}
+                          {a.district} · {t("{n} case(s)", { n: a.case_count })}
                         </p>
                       </div>
                     </div>
@@ -221,7 +267,7 @@ export default function AlertsPage() {const{t}=usePreferences();
                       <Badge variant={a.alert_type === "mpdsr" ? "secondary" : riskVariant(risk)}>
                         {a.alert_type === "mpdsr" ? "MPDSR" : `Risk ${risk}`}
                       </Badge>
-                      <Badge variant={a.status === "active" ? "destructive" : "outline"}>{a.status}</Badge>
+                      <Badge variant={a.status === "active" ? "destructive" : "outline"}>{t(STATUS_LABELS[a.status] ?? a.status)}</Badge>
                     </div>
                   </div>
 
@@ -239,17 +285,19 @@ export default function AlertsPage() {const{t}=usePreferences();
 
                   {/* metadata grid */}
                   <div className="grid grid-cols-2 gap-x-4 gap-y-1 rounded-lg bg-muted/40 p-2.5 text-[11px] text-muted-foreground sm:grid-cols-3">
-                    <span>Triggered: {fmtDateTime(a.triggered_date)}</span>
-                    {cluster?.window_hours ? <span>Window: {String(cluster.window_hours)}h</span> : null}
-                    {cluster?.detection ? <span>Detection: {String(cluster.detection)}</span> : null}
-                    <span className="col-span-full">Channels: {a.dispatched_channels ?? "dashboard"}</span>
-                    {a.resolved_at && <span className="text-emerald-600">Resolved: {fmtDateTime(a.resolved_at)}</span>}
+                    <span>{t("Triggered:")} {fmtDateTime(a.triggered_date)}</span>
+                    {cluster?.window_hours ? <span>{t("Window:")} {String(cluster.window_hours)}h</span> : null}
+                    {cluster?.detection ? <span>{t("Detection:")} {String(cluster.detection)}</span> : null}
+                    <span className="col-span-full">{t("Channels:")} {a.dispatched_channels ?? "dashboard"}</span>
+                    {a.resolved_at && <span className="text-emerald-600">{t("Resolved:")} {fmtDateTime(a.resolved_at)}</span>}
                   </div>
+
+                  <AlertExplain alert={a} />
 
                   {canResolve && a.status === "active" && (
                     <div className="flex justify-end pt-1">
                       <Button size="sm" variant={critical ? "destructive" : "outline"} onClick={() => resolve(a.alert_id)}>
-                        <CheckCircle2 className="size-4" /> Resolve alert
+                        <CheckCircle2 className="size-4" /> {t("Resolve alert")}
                       </Button>
                     </div>
                   )}
@@ -261,7 +309,7 @@ export default function AlertsPage() {const{t}=usePreferences();
             <Card className="shadow-lg">
               <CardContent className="py-10 text-center text-sm text-muted-foreground">
                 <SlidersHorizontal className="mx-auto mb-2 size-5 text-muted-foreground/60" />
-                No alerts match the current filters.
+                {t("No alerts match the current filters.")}
               </CardContent>
             </Card>
           )}

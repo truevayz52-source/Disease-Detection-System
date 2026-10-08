@@ -13,9 +13,12 @@ import { offlineRouter } from "./routes/offline-sync.js"
 import { passwordResetRouter } from "./routes/password-reset.js"
 import { blockchainRouter } from "./routes/blockchain.js"
 import { runScheduledReports } from "./lib/scheduled-reports.js"
+import { detectOutbreaks } from "./lib/outbreak.js"
 import helmet from "helmet"
 import cors from "cors"
+import compression from "compression"
 import { config } from "./config.js"
+import { startDiscoveryBeacon } from "./lib/discovery-beacon.js"
 import { authRouter } from "./routes/auth.js"
 import { icdRouter } from "./routes/icd.js"
 import { facilitiesRouter } from "./routes/facilities.js"
@@ -50,11 +53,14 @@ import { fhirRouter } from "./routes/fhir.js"
 import { playbooksRouter } from "./routes/playbooks.js"
 import { evidenceRouter } from "./routes/evidence.js"
 import { translateRouter } from "./routes/translate.js"
+import { i18nRouter } from "./routes/i18n.js"
+import { aiRouter } from "./routes/ai.js"
 
 const app = express()
 
 app.disable("x-powered-by")
 app.use(helmet({ contentSecurityPolicy: false })) // API-only; CSP handled by the SPA host
+app.use(compression()) // gzip responses — low-bandwidth mobile clients
 app.use(cors({ origin: config.clientOrigin, credentials: true }))
 app.use(express.json({ limit: "2mb" }))
 
@@ -103,6 +109,8 @@ app.use("/api/users", usersRouter)
 app.use("/api/audit", auditRouter)
 app.use("/api", certificatesRouter)
 app.use("/api", translateRouter)
+app.use("/api/i18n", i18nRouter)
+app.use("/api/ai", aiRouter)
 
 app.use((_req, res) => res.status(404).json({ error: "Not found" }))
 
@@ -124,6 +132,23 @@ attachRealtime(server)
 attachVoiceStream(server)
 const reportTimer = setInterval(() => { void runScheduledReports() }, 60000)
 reportTimer.unref()
+
+// Automatic outbreak detection every 8 minutes (Ch 4.4). Runs immediately
+// on startup so the dashboard is populated without a manual trigger.
+const OUTBREAK_INTERVAL_MS = 8 * 60 * 1000
+const runOutbreakDetection = () =>
+  detectOutbreaks()
+    .then((created) => {
+      if (created.length) {
+        console.log(`[outbreak] scheduled detection created ${created.length} alert(s)`)
+      }
+    })
+    .catch((err) => console.error("[outbreak] scheduled detection failed:", err?.message ?? err))
+const outbreakTimer = setInterval(runOutbreakDetection, OUTBREAK_INTERVAL_MS)
+outbreakTimer.unref()
+runOutbreakDetection()
+
 server.listen(config.port, () => {
   console.log(`[Disease Detection System] API listening on http://127.0.0.1:${config.port}`)
+  startDiscoveryBeacon(config.port)
 })

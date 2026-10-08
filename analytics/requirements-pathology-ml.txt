@@ -1,0 +1,5 @@
+# Optional heavy backend for analytics/pathology.py — enables the
+# PATHOLOGY_MODEL env (Hugging Face image-classification models, e.g.
+# PATHOLOGY_MODEL=some/histopathology-classifier). ~2.5GB download.
+torch>=2.4
+transformers>=4.44

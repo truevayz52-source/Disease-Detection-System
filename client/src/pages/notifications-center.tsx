@@ -67,14 +67,14 @@ export default function NotificationsCenter() {const{t}=usePreferences();
 
   return (
     <>
-      <SiteHeader title="Notifications" />
+      <SiteHeader title={t("Notifications")} />
       <div className="mx-auto w-full max-w-4xl space-y-4 p-4 lg:p-6">
         {/* header row */}
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2">
             <div className="rounded-lg bg-primary/10 p-2 text-primary"><BellRing className="size-5" /></div>
             <div>
-              <p className="text-sm font-semibold">Inbox</p>
+              <p className="text-sm font-semibold">{t("Inbox")}</p>
               <p className="text-xs text-muted-foreground">
                 {unread > 0 ? `${unread} unread` : "You're all caught up"} · auto-refreshes
               </p>
@@ -135,7 +135,7 @@ export default function NotificationsCenter() {const{t}=usePreferences();
                     <div className="flex shrink-0 flex-col items-end gap-1.5 sm:flex-row sm:items-center">
                       {n.action_url?.startsWith("/") && !n.action_url.startsWith("//") && (
                         <Button size="sm" variant="ghost" asChild>
-                          <Link to={n.action_url}>Open</Link>
+                          <Link to={n.action_url}>{t("Open")}</Link>
                         </Button>
                       )}
                       {isUnread && (
@@ -144,7 +144,7 @@ export default function NotificationsCenter() {const{t}=usePreferences();
                           <MailOpen className="size-4" />
                         </Button>
                       )}
-                      <Button size="sm" variant="ghost" title="Dismiss" className="text-muted-foreground hover:text-destructive"
+                      <Button size="sm" variant="ghost" title={t("Dismiss")} className="text-muted-foreground hover:text-destructive"
                         onClick={() => act(() => api(`/inbox/${n.notification_id}`, { method: "DELETE" }), "Dismissed")}>
                         <Trash2 className="size-4" />
                       </Button>

@@ -11,11 +11,12 @@ import { readFile } from "node:fs/promises"
 import { config } from "../config.js"
 import { emailConfigured } from "../lib/email.js"
 import { pathologyResult, serviceJson, unavailable, whoConfigured } from "../lib/integrations.js"
+import { dhis2Configured, forwardToOpenhim, openhimConfigured, pushToDhis2, regionalStatus } from "../lib/regional-bridge.js"
 import { SUPPORTED_LANGUAGES } from "../lib/languages.js"
 import { translateConfigured } from "./translate.js"
 
 export const operationsRouter = Router()
-operationsRouter.use(["/settings","/security","/integrations","/gps","/search","/analytics/districts","/forecasts","/voice","/ai"],requireAuth)
+operationsRouter.use(["/settings","/security","/integrations","/gps","/search","/analytics/districts","/forecasts","/voice","/ai","/regional"],requireAuth)
 const admin = requireRole("system_admin")
 const analysis = requireRole("public_health_analyst","system_admin","executive")
 operationsRouter.get("/settings/public",async(_req,res)=>res.json({name:"Disease Detection System",languages:SUPPORTED_LANGUAGES,timezone:"Africa/Harare"}))
@@ -38,7 +39,7 @@ operationsRouter.post("/security/unlock/:id",admin,async(req,res)=>{
   await query("UPDATE users SET failed_login_attempts=0,locked_until=NULL WHERE user_id=?",[req.params.id])
   await writeAudit(req,{action:"unlock_account",entityType:"users",entityId:req.params.id});res.json({ok:true})
 })
-operationsRouter.get("/integrations/status",admin,async(_req,res)=>res.json({analytics:await pythonHealth(),pathologyModel:process.env.PATHOLOGY_INFERENCE_URL?"configured; availability checked on use":"not_configured",whisper:process.env.WHISPER_URL?"configured; availability checked on use":"not_configured",whoCatalog:whoConfigured()?"ICD-11 lookup configured; local ICD-10 retained":"local ICD-10; WHO credentials/release not configured",regionalBridge:"not_configured",email:emailConfigured()?"SMTP configured; delivery checked on use":"not_configured",translation:translateConfigured()?"Gemini configured; requests are de-identified before dispatch":"not_configured — offline glossary fallback only",audit:"SHA-256 hash chain; not a distributed blockchain"}))
+operationsRouter.get("/integrations/status",admin,async(_req,res)=>res.json({analytics:await pythonHealth(),pathologyModel:process.env.PATHOLOGY_INFERENCE_URL?"configured; availability checked on use":"not_configured",whisper:process.env.WHISPER_URL?"configured; availability checked on use":"not_configured",whoCatalog:whoConfigured()?"ICD-11 lookup configured; local ICD-10 retained":"local ICD-10; WHO credentials/release not configured",regionalBridge:regionalStatus(),email:emailConfigured()?"SMTP configured; delivery checked on use":"not_configured",translation:translateConfigured()?"Gemini configured; requests are de-identified before dispatch":"not_configured — offline glossary fallback only",audit:"SHA-256 hash chain; not a distributed blockchain"}))
 const gps=z.object({latitude:z.number().min(-90).max(90),longitude:z.number().min(-180).max(180),accuracy:z.number().min(0).max(100000).optional(),altitude:z.number().optional(),activity:z.string().max(50).default("field_visit")})
 operationsRouter.post("/gps/track",requireRole("medical_officer","system_admin"),async(req,res)=>{
   const d=gps.parse(req.body),id=newId("gps")
@@ -114,4 +115,23 @@ operationsRouter.get("/ai/pathology/results/:imageId",requireRole("pathologist",
   const [image]=await query<any[]>("SELECT notification_id FROM tele_pathology_images WHERE image_id=?",[req.params.imageId])
   if(!image||!await canAccessNotification(req.user!,image.notification_id,true))return res.status(403).json({error:"Image unavailable"})
   res.json({items:await query("SELECT * FROM ai_pathology_analysis WHERE image_id=? ORDER BY analysis_timestamp DESC",[req.params.imageId])})
+})
+
+// Push the district-level mortality aggregate to the configured regional
+// exchange targets (DHIS2 dataValueSets / OpenHIM FHIR channel). Counts
+// only — no case-level data leaves this API.
+operationsRouter.post("/regional/push",requireRole("system_admin","public_health_analyst"),async(req,res)=>{
+  const days=z.number().int().min(1).max(365).default(30).parse(req.body?.days)
+  const targets:{name:string;ok:boolean;detail?:unknown}[]=[]
+  if(dhis2Configured()){
+    try{targets.push({name:"dhis2",ok:true,detail:await pushToDhis2(days)})}
+    catch(e){targets.push({name:"dhis2",ok:false,detail:String((e as Error).message)})}
+  }
+  if(openhimConfigured()){
+    try{targets.push({name:"openhim",ok:true,detail:await forwardToOpenhim(days)})}
+    catch(e){targets.push({name:"openhim",ok:false,detail:String((e as Error).message)})}
+  }
+  if(!targets.length)throw unavailable("No regional bridge target is configured (DHIS2_* or OPENHIM_*)")
+  await writeAudit(req,{action:"regional_push",entityType:"regional_bridge",entityId:`${days}d`,details:{targets:targets.map(t=>({name:t.name,ok:t.ok}))}})
+  res.status(targets.every(t=>t.ok)?201:502).json({days,targets})
 })

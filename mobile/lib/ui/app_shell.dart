@@ -65,103 +65,115 @@ class NavItem {
   });
 }
 
-const kNavItems = <NavItem>[
-  NavItem('/dashboard', 'Dashboard', Icons.dashboard_outlined, kRoles),
-  NavItem('/notifications', 'Death Notifications', Icons.post_add_outlined, [
-    'medical_officer',
-    'public_health_analyst',
-    'system_admin',
-    'mortuary_clerk',
-  ]),
+final kNavItems = <NavItem>[
+  NavItem('/dashboard', tr('Dashboard'), Icons.dashboard_outlined, kRoles),
+  NavItem(
+    '/notifications',
+    tr('Death Notifications'),
+    Icons.post_add_outlined,
+    [
+      'medical_officer',
+      'public_health_analyst',
+      'system_admin',
+      'mortuary_clerk',
+    ],
+  ),
   NavItem(
     '/pathology/queue',
-    'Pathology Review Queue',
+    tr('Pathology Review Queue'),
     Icons.biotech_outlined,
     ['pathologist'],
   ),
-  NavItem('/autopsy', 'Autopsy Reports', Icons.medical_services_outlined, [
+  NavItem('/autopsy', tr('Autopsy Reports'), Icons.medical_services_outlined, [
     'pathologist',
     'public_health_analyst',
     'system_admin',
   ]),
-  NavItem('/voice-autopsy', 'Verbal Autopsy', Icons.mic_none_outlined, [
+  NavItem('/voice-autopsy', tr('Verbal Autopsy'), Icons.mic_none_outlined, [
     'medical_officer',
     'mortuary_clerk',
     'system_admin',
   ], implemented: false),
-  NavItem('/signals', 'Signal Registry', Icons.sensors_outlined, [
+  NavItem('/signals', tr('Signal Registry'), Icons.sensors_outlined, [
     'medical_officer',
     'mortuary_clerk',
     'public_health_analyst',
     'system_admin',
   ], implemented: false),
-  NavItem('/mpdsr', 'MPDSR Workflows', Icons.fact_check_outlined, [
+  NavItem('/mpdsr', tr('MPDSR Workflows'), Icons.fact_check_outlined, [
     'medical_officer',
     'public_health_analyst',
     'system_admin',
   ], implemented: false),
-  NavItem('/alerts', 'Alerts', Icons.warning_amber_outlined, [
+  NavItem('/alerts', tr('Alerts'), Icons.warning_amber_outlined, [
     'medical_officer',
     'pathologist',
     'public_health_analyst',
     'system_admin',
   ]),
-  NavItem('/analytics', 'Outbreak Analytics', Icons.insights_outlined, [
+  NavItem('/analytics', tr('Outbreak Analytics'), Icons.insights_outlined, [
     'public_health_analyst',
     'system_admin',
   ]),
-  NavItem('/analytics/map', 'Outbreak Map', Icons.map_outlined, [
+  NavItem('/analytics/map', tr('Outbreak Map'), Icons.map_outlined, [
     'public_health_analyst',
     'system_admin',
   ], implemented: false),
   NavItem(
     '/cross-border',
-    'Cross-border Tracking',
+    tr('Cross-border Tracking'),
     Icons.compare_arrows_outlined,
     ['medical_officer', 'public_health_analyst', 'system_admin'],
     implemented: false,
   ),
   NavItem(
     '/resource-allocation',
-    'Resource Forecasting',
+    tr('Resource Forecasting'),
     Icons.query_stats_outlined,
     ['public_health_analyst', 'system_admin'],
     implemented: false,
   ),
-  NavItem('/reports', 'Reports', Icons.description_outlined, [
+  NavItem('/reports', tr('Reports'), Icons.description_outlined, [
     'public_health_analyst',
     'system_admin',
     'executive',
   ], implemented: false),
-  NavItem('/gps-dashboard', 'GPS Tracking', Icons.gps_fixed_outlined, [
+  NavItem('/gps-dashboard', tr('GPS Tracking'), Icons.gps_fixed_outlined, [
     'medical_officer',
     'system_admin',
   ], implemented: false),
-  NavItem('/offline-sync', 'Offline Sync', Icons.sync_outlined, [
+  NavItem('/offline-sync', tr('Offline Sync'), Icons.sync_outlined, [
     'medical_officer',
     'mortuary_clerk',
     'system_admin',
   ]),
-  NavItem('/admin/users', 'User Management', Icons.group_outlined, [
+  NavItem('/admin/users', tr('User Management'), Icons.group_outlined, [
     'system_admin',
   ]),
-  NavItem('/admin/facilities', 'Facilities', Icons.local_hospital_outlined, [
-    'system_admin',
-  ]),
-  NavItem('/alert-config', 'Alert Thresholds', Icons.tune_outlined, [
+  NavItem(
+    '/admin/facilities',
+    tr('Facilities'),
+    Icons.local_hospital_outlined,
+    ['system_admin'],
+  ),
+  NavItem('/alert-config', tr('Alert Thresholds'), Icons.tune_outlined, [
     'public_health_analyst',
     'system_admin',
   ], implemented: false),
-  NavItem('/security-dashboard', 'Security Dashboard', Icons.shield_outlined, [
-    'system_admin',
-  ], implemented: false),
-  NavItem('/audit', 'Audit Trail', Icons.receipt_long_outlined, [
+  NavItem(
+    '/security-dashboard',
+    tr('Security Dashboard'),
+    Icons.shield_outlined,
+    ['system_admin'],
+    implemented: false,
+  ),
+  NavItem('/audit', tr('Audit Trail'), Icons.receipt_long_outlined, [
     'public_health_analyst',
     'system_admin',
   ]),
-  NavItem('/system-settings', 'System Settings', Icons.settings_outlined, [
+  NavItem('/system-settings', tr('System Settings'), Icons.settings_outlined, [
     'system_admin',
-  ], implemented: false),
+  ]),
 ];
 
 List<NavItem> navItemsFor(String role) =>

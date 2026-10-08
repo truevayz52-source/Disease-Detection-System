@@ -1,8 +1,5 @@
-import { usePreferences } from "@/lib/preferences"
-
-
 /** Lighten (+) or darken (−) a hex color by pct (0–100). */
-export function shade(hex: string, pct: number) {const{t}=usePreferences();
+export function shade(hex: string, pct: number) {
   const n = parseInt(hex.slice(1), 16)
   const amt = Math.round(2.55 * pct)
   const r = Math.min(255, Math.max(0, (n >> 16) + amt))

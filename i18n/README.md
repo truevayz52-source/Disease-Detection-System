@@ -41,10 +41,30 @@ Sync targets (generated — do not edit directly):
 ## Commands
 
 ```bash
-pnpm i18n:sync    # copy canonical files into mobile/assets/lang + client/src/i18n
-pnpm i18n:scan    # scan t()/tr() call sites, regenerate i18n/lang/en.json
-pnpm i18n:check   # validate JSON, key parity and placeholder preservation
+pnpm i18n:sync     # copy canonical files into mobile/assets/lang + client/src/i18n
+pnpm i18n:scan     # scan t()/tr() call sites, regenerate i18n/lang/en.json
+pnpm i18n:check    # validate JSON, key parity and placeholder preservation
+pnpm i18n:corpora  # harvest verified strings from open-source gettext catalogs
+pnpm i18n:build    # machine-generate missing keys (GEMINI_API_KEY) + report
 ```
+
+## Dictionary provenance
+
+Dictionary values resolve in three tiers, in order:
+
+1. `i18n/corpora/<code>.json` — human-verified strings matched from public
+   gettext catalogs (GNOME/KDE/LibreOffice). Coverage is small because these
+   languages are poorly represented in FOSS l10n.
+2. Existing seed values in `i18n/lang/<code>.json` — earlier curated seeds.
+3. Machine translation via `scripts/build-dictionaries.mjs` — Gemini
+   (`GEMINI_API_KEY`/`TRANSLATE_MODEL` in `server/.env`) with a model fallback
+   chain for free-tier congestion; MyMemory is the keyless fallback.
+
+Machine output is always draft-marked in `_meta`; low-resource languages
+(Chibarwe, Kalanga, Tshwa, Nambya, Ndau, Tonga) have no reliable MT coverage —
+their output is best-effort with family-hint prompting and needs review by
+MOHCC language services before production use. Provider responses are cached
+in `i18n/.cache/` (gitignored) so re-runs are incremental.
 
 ## Languages (Constitution of Zimbabwe, s.6)
 

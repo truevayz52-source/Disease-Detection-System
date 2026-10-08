@@ -5,6 +5,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+void _log(String msg) => debugPrint('[secure_store] $msg');
+
 /// Hardware-backed secret storage (Android KeyStore / iOS Keychain via
 /// flutter_secure_storage) for session tokens, offline credential verifiers
 /// and the Hive database key.
@@ -27,13 +29,26 @@ class SecureStore {
   /// Read [key] from secure storage; if absent, look for a legacy
   /// SharedPreferences value under [legacyKey] and migrate it forward.
   static Future<String?> read(String key, {String? legacyKey}) async {
-    final value =
-        await _guard(() => _storage.read(key: key)) ??
-        await _prefsRead('$_prefsPrefix$key');
-    if (value != null) return value;
-    if (legacyKey == null) return null;
+    final secure = await _guard(() => _storage.read(key: key));
+    if (secure != null) {
+      _log('read $key: secure storage hit');
+      return secure;
+    }
+    final fallback = await _prefsRead('$_prefsPrefix$key');
+    if (fallback != null) {
+      _log('read $key: fallback prefs hit');
+      return fallback;
+    }
+    if (legacyKey == null) {
+      _log('read $key: not found');
+      return null;
+    }
     final legacy = await _prefsRead(legacyKey);
-    if (legacy == null) return null;
+    if (legacy == null) {
+      _log('read $key: no legacy entry');
+      return null;
+    }
+    _log('read $key: migrating legacy entry');
     await write(key, legacy);
     await _prefsRemove(legacyKey);
     return legacy;
@@ -44,7 +59,11 @@ class SecureStore {
       await _storage.write(key: key, value: value);
       return true;
     });
-    if (handled == true) return;
+    if (handled == true) {
+      _log('write $key: secure storage');
+      return;
+    }
+    _log('write $key: fallback prefs (secure plugin unavailable)');
     await _prefsWrite('$_prefsPrefix$key', value);
   }
 

@@ -47,7 +47,7 @@ export default function AutopsiesPage() {const{t}=usePreferences();
 
   function exportCsv() {
     const header = ["Patient", "Facility", "Final cause", "ICD", "Pathologist", "Created", "Status", "Legal"]
-    const rows = items.map((a) => [a.patient_name, a.facility_name, a.final_cause_of_death, a.final_icd_code, a.pathologist_name, a.created_at, STATUS_LABELS[a.status] ?? a.status, a.legal_threshold_flag ? "Yes" : "No"])
+    const rows = items.map((a) => [a.patient_name, a.facility_name, a.final_cause_of_death, a.final_icd_code, a.pathologist_name, a.created_at, t(STATUS_LABELS[a.status] ?? a.status), a.legal_threshold_flag ? t("Yes") : t("No")])
     const csv = [header, ...rows].map((r) => r.map((c) => `"${String(c ?? "").replaceAll('"', '""')}"`).join(",")).join("\n")
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }))
     const a = document.createElement("a"); a.href = url; a.download = `autopsies-${new Date().toISOString().slice(0, 10)}.csv`; a.click()
@@ -60,8 +60,8 @@ export default function AutopsiesPage() {const{t}=usePreferences();
       <div className="space-y-4 p-4 lg:p-6">
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           <StatCard label={t("Total reports")} value={stats.total} icon={Stethoscope} color="blue" compact />
-          <StatCard label="Draft" value={stats.draft} icon={FilePen} color="amber" compact />
-          <StatCard label="Finalized" value={stats.finalized} icon={FileCheck} color="emerald" compact />
+          <StatCard label={t("Draft")} value={stats.draft} icon={FilePen} color="amber" compact />
+          <StatCard label={t("Finalized")} value={stats.finalized} icon={FileCheck} color="emerald" compact />
           <StatCard label={t("Legal threshold")} value={stats.legal} icon={Gavel} color="red" compact />
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -79,7 +79,7 @@ export default function AutopsiesPage() {const{t}=usePreferences();
             <SelectContent>
               <SelectItem value="all">{t("All statuses")}</SelectItem>
               {STATUSES.map((s) => (
-                <SelectItem key={s} value={s}>{STATUS_LABELS[s] ?? s}</SelectItem>
+                <SelectItem key={s} value={s}>{t(STATUS_LABELS[s] ?? s)}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -87,7 +87,7 @@ export default function AutopsiesPage() {const{t}=usePreferences();
             value={facilityFilter === "all" ? "" : facilityFilter}
             onChange={(v) => setFacilityFilter(v || "all")}
           />
-          <Button variant="outline" size="sm" onClick={() => mutate()}><RefreshCw className="size-3.5" /> Refresh</Button>
+          <Button variant="outline" size="sm" onClick={() => mutate()}><RefreshCw className="size-3.5" /> {t("Refresh")}</Button>
           <Button variant="outline" size="sm" onClick={exportCsv} disabled={!items.length}><Download className="size-3.5" /> {t("Export CSV")}</Button>
           <p className="ml-auto text-sm text-muted-foreground">{items.length} report(s)</p>
         </div>
@@ -97,13 +97,13 @@ export default function AutopsiesPage() {const{t}=usePreferences();
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Patient</TableHead>
-                  <TableHead>Facility</TableHead>
+                  <TableHead>{t("Patient")}</TableHead>
+                  <TableHead>{t("Facility")}</TableHead>
                   <TableHead>{t("Final cause")}</TableHead>
-                  <TableHead>Pathologist</TableHead>
-                  <TableHead>Created</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead>{t("Pathologist")}</TableHead>
+                  <TableHead>{t("Created")}</TableHead>
+                  <TableHead>{t("Status")}</TableHead>
+                  <TableHead className="text-right">{t("Actions")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -114,7 +114,7 @@ export default function AutopsiesPage() {const{t}=usePreferences();
                         {a.patient_name}
                       </Link>
                       {!!a.legal_threshold_flag && (
-                        <Badge variant="destructive" className="ml-2 text-[10px]">LEGAL</Badge>
+                        <Badge variant="destructive" className="ml-2 text-[10px]">{t("LEGAL")}</Badge>
                       )}
                     </TableCell>
                     <TableCell className="text-muted-foreground">{a.facility_name}</TableCell>
@@ -126,12 +126,12 @@ export default function AutopsiesPage() {const{t}=usePreferences();
                     <TableCell>{fmtDate(a.created_at)}</TableCell>
                     <TableCell>
                       <Badge variant={STATUS_VARIANTS[a.status] ?? "secondary"}>
-                        {STATUS_LABELS[a.status] ?? a.status}
+                        {t(STATUS_LABELS[a.status] ?? a.status)}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
                       <Button size="sm" variant="outline" asChild>
-                        <Link to={`/autopsy/${a.autopsy_id}`}><Eye className="size-4" /> View</Link>
+                        <Link to={`/autopsy/${a.autopsy_id}`}><Eye className="size-4" /> {t("View")}</Link>
                       </Button>
                     </TableCell>
                   </TableRow>

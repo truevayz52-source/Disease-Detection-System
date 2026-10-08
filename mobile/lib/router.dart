@@ -2,6 +2,7 @@ import 'package:go_router/go_router.dart';
 
 import 'data/auth_repository.dart';
 import 'features/admin/admin_screens.dart';
+import 'features/admin/system_settings_screen.dart';
 import 'features/alerts/alerts_screen.dart';
 import 'features/analytics/analytics_screen.dart';
 import 'features/auth/sign_in_screen.dart';
@@ -52,6 +53,7 @@ final _routeRoles = <String, List<String>>{
   '/analytics': _analystRoles,
   '/admin/users': const ['system_admin'],
   '/admin/facilities': const ['system_admin'],
+  '/system-settings': const ['system_admin'],
   '/audit': _analystRoles,
 };
 
@@ -143,6 +145,10 @@ GoRouter buildRouter(AuthRepository auth) {
         builder: (c, s) => const AdminFacilitiesScreen(),
       ),
       GoRoute(path: '/audit', builder: (c, s) => const AuditScreen()),
+      GoRoute(
+        path: '/system-settings',
+        builder: (c, s) => const SystemSettingsScreen(),
+      ),
       GoRoute(
         path: '/offline-sync',
         builder: (c, s) => const OfflineSyncScreen(),

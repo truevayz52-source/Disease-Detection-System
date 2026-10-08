@@ -10,6 +10,7 @@ import '../../data/draft_store.dart';
 import '../../data/sync_service.dart';
 import '../../ui/app_shell.dart';
 import '../../ui/theme.dart';
+import '../../ui/ai_summary.dart';
 import '../../ui/translated_text.dart';
 import '../../ui/widgets.dart';
 
@@ -109,7 +110,7 @@ class _NotificationDetailScreenState extends State<NotificationDetailScreen> {
     final n = _detail?.notification;
 
     return AppScaffold(
-      title: 'Notification Detail',
+      title: tr('Notification Detail'),
       child: _detail == null
           ? loadingOr(_error, onRetry: _load)
           : RefreshIndicator(
@@ -143,24 +144,27 @@ class _NotificationDetailScreenState extends State<NotificationDetailScreen> {
                             ],
                           ),
                           const SizedBox(height: 14),
-                          InfoRow('National ID', n.nationalId ?? '—'),
+                          InfoRow(tr('National ID'), n.nationalId ?? '—'),
                           InfoRow(
-                            'Age / Gender',
+                            tr('Age / Gender'),
                             '${n.age ?? '—'} / ${tr(n.gender)}',
                           ),
-                          InfoRow('Address', n.residentialAddress ?? '—'),
-                          InfoRow('Date of death', fmtDateTime(n.dateOfDeath)),
+                          InfoRow(tr('Address'), n.residentialAddress ?? '—'),
                           InfoRow(
-                            'Preliminary ICD',
+                            tr('Date of death'),
+                            fmtDateTime(n.dateOfDeath),
+                          ),
+                          InfoRow(
+                            tr('Preliminary ICD'),
                             '${n.preliminaryIcdCode} — ${n.icdDescription}',
                           ),
-                          InfoRow('Category', n.diseaseCategory),
+                          InfoRow(tr('Category'), n.diseaseCategory),
                           InfoRow(
-                            'Facility',
+                            tr('Facility'),
                             '${n.facilityName}, ${n.district}',
                           ),
                           InfoRow(
-                            'Reported by',
+                            tr('Reported by'),
                             '${n.reportedByName} · ${fmtDate(n.createdAt)}',
                           ),
                           if (n.clinicalSummary != null &&
@@ -175,6 +179,17 @@ class _NotificationDetailScreenState extends State<NotificationDetailScreen> {
                             ),
                             const SizedBox(height: 2),
                             TranslatedText(
+                              n.clinicalSummary!,
+                              pii: [
+                                n.patientName,
+                                if (n.nationalId != null) n.nationalId!,
+                                if (n.residentialAddress != null)
+                                  n.residentialAddress!,
+                                n.facilityName,
+                                n.reportedByName,
+                              ],
+                            ),
+                            AiSummary(
                               n.clinicalSummary!,
                               pii: [
                                 n.patientName,
@@ -213,7 +228,7 @@ class _NotificationDetailScreenState extends State<NotificationDetailScreen> {
                           )
                         : null,
                     child: _detail!.images.isEmpty
-                        ? const EmptyState('No pathology images uploaded yet.')
+                        ? EmptyState(tr('No pathology images uploaded yet.'))
                         : GridView.count(
                             crossAxisCount:
                                 MediaQuery.of(context).size.width > 700 ? 3 : 2,
@@ -236,9 +251,9 @@ class _NotificationDetailScreenState extends State<NotificationDetailScreen> {
                   ),
                   const SizedBox(height: 16),
                   SectionCard(
-                    title: 'Autopsy report',
+                    title: tr('Autopsy report'),
                     child: _detail!.autopsy == null
-                        ? const EmptyState('No autopsy report yet.')
+                        ? EmptyState(tr('No autopsy report yet.'))
                         : Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
@@ -257,12 +272,12 @@ class _NotificationDetailScreenState extends State<NotificationDetailScreen> {
                               ),
                               const SizedBox(height: 8),
                               InfoRow(
-                                'Pathologist',
+                                tr('Pathologist'),
                                 _detail!.autopsy!.pathologistName ?? '—',
                               ),
                               if (_detail!.autopsy!.finalIcdCode != null)
                                 InfoRow(
-                                  'Final ICD',
+                                  tr('Final ICD'),
                                   _detail!.autopsy!.finalIcdCode!,
                                 ),
                               if (_detail!.autopsy!.legalThresholdFlag)

@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'dart:math';
-import 'dart:typed_data';
 
 import 'package:cryptography/cryptography.dart';
+import 'package:flutter/foundation.dart';
 
 import 'secure_store.dart';
 import '../l10n/app_localizations.dart';
@@ -33,14 +33,18 @@ class OfflineAccount {
   final Map<String, dynamic> user;
   final String? token;
   final DateTime savedAt;
+  final DateTime lastOnlineAt;
   final bool has2fa;
+  final bool biometricEnabled;
 
   const OfflineAccount({
     required this.email,
     required this.user,
     this.token,
     required this.savedAt,
+    required this.lastOnlineAt,
     this.has2fa = false,
+    this.biometricEnabled = false,
   });
 }
 
@@ -92,8 +96,9 @@ class OfflineAccountStore {
       hash = base64Encode(await key.extractBytes());
     }
     final now = DateTime.now().toIso8601String();
+    final key = _key(email);
     await SecureStore.write(
-      _key(email),
+      key,
       jsonEncode({
         'v': 1,
         'email': email.trim().toLowerCase(),
@@ -102,9 +107,13 @@ class OfflineAccountStore {
         'user': user,
         'token': token,
         'has2fa': has2fa || (existing?['has2fa'] == true),
+        'biometricEnabled': existing?['biometricEnabled'] == true,
         'savedAt': now,
         'lastOnlineAt': now,
       }),
+    );
+    debugPrint(
+      '[offline_accounts] saved verifier for ${email.trim().toLowerCase()}',
     );
   }
 
@@ -184,21 +193,53 @@ class OfflineAccountStore {
         ),
       );
     }
+    return _accountFromBlob(blob, lastOnlineAt: lastOnline);
+  }
+
+  /// Read the account snapshot without credential verification. Used by
+  /// biometric unlock: the OS biometric prompt replaces the password check.
+  Future<OfflineAccount?> getAccount(String email) async {
+    final blob = await _readBlob(email);
+    if (blob == null) return null;
+    return _accountFromBlob(blob);
+  }
+
+  /// Toggle biometric unlock for an activated account.
+  Future<void> setBiometricEnabled(String email, bool enabled) async {
+    final blob = await _readBlob(email);
+    if (blob == null) return;
+    blob['biometricEnabled'] = enabled;
+    await SecureStore.write(_key(email), jsonEncode(blob));
+  }
+
+  OfflineAccount _accountFromBlob(
+    Map<String, dynamic> blob, {
+    DateTime? lastOnlineAt,
+  }) {
+    final savedAt =
+        DateTime.tryParse(blob['savedAt']?.toString() ?? '') ?? DateTime.now();
     return OfflineAccount(
       email: blob['email'] as String,
       user: (blob['user'] as Map).cast<String, dynamic>(),
       token: blob['token'] as String?,
-      savedAt:
-          DateTime.tryParse(blob['savedAt']?.toString() ?? '') ??
-          DateTime.now(),
+      savedAt: savedAt,
+      lastOnlineAt:
+          lastOnlineAt ??
+          DateTime.tryParse(blob['lastOnlineAt']?.toString() ?? '') ??
+          savedAt,
       has2fa: blob['has2fa'] == true,
+      biometricEnabled: blob['biometricEnabled'] == true,
     );
   }
 
   /// Read the account blob from secure storage, migrating a legacy
   /// SharedPreferences entry on first access.
   Future<Map<String, dynamic>?> _readBlob(String email) async {
-    final raw = await SecureStore.read(_key(email), legacyKey: _key(email));
+    final key = _key(email);
+    final raw = await SecureStore.read(key, legacyKey: key);
+    debugPrint(
+      '[offline_accounts] readBlob for ${email.trim().toLowerCase()}: ${raw != null ? 'found' : 'missing'}',
+    );
     if (raw == null) return null;
     try {
       return (jsonDecode(raw) as Map).cast<String, dynamic>();

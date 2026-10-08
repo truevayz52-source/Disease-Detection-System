@@ -6,9 +6,18 @@ export function unavailable(message: string) { return new ServiceUnavailableErro
 export async function serviceJson(url: string, options: RequestInit = {}) {
   try {
     const response = await fetch(url, { ...options, redirect: "error", signal: AbortSignal.timeout(120000) })
-    if (!response.ok) throw Error("Service rejected request")
+    if (!response.ok) {
+      const body = await response.text().catch(() => "")
+      console.error("[serviceJson]", url, response.status, body.slice(0, 500))
+      throw Error(`Service rejected request: ${response.status}`)
+    }
     return await response.json()
-  } catch { throw unavailable("The configured service is unavailable. Please try again later.") }
+  } catch (e) {
+    if (!(e instanceof Error && e.message.startsWith("Service rejected"))) {
+      console.error("[serviceJson]", url, (e as Error).message, (e as Error).cause ?? "")
+    }
+    throw unavailable("The configured service is unavailable. Please try again later.")
+  }
 }
 
 export const pathologyResult = z.object({

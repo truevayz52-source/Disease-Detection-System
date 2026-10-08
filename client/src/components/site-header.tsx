@@ -29,7 +29,7 @@ const SUBTITLES: Record<string, string> = {
   "Search": "Search across records",
 }
 
-function initials(name: string) {const{t}=usePreferences();
+function initials(name: string) {
   return name.split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase()
 }
 
@@ -55,7 +55,7 @@ export function SiteHeader({ title, subtitle }: { title: string; subtitle?: stri
           <span className="size-1.5 animate-pulse rounded-full bg-emerald-500" />SYSTEM LIVE
         </span>
 
-        {user?.role !== "executive" && <Link to="/search" aria-label="Search" className="rounded-md border border-border p-2 hover:bg-muted"><Search className="size-4" /></Link>}
+        {user?.role !== "executive" && <Link to="/search" aria-label={t("Search")} className="rounded-md border border-border p-2 hover:bg-muted"><Search className="size-4" /></Link>}
 
         <LanguageMenu />
 
@@ -67,7 +67,7 @@ export function SiteHeader({ title, subtitle }: { title: string; subtitle?: stri
             {theme === "dark" ? <Moon className="size-4" /> : theme === "hc" ? <Glasses className="size-4" /> : theme === "light" ? <Sun className="size-4" /> : <Monitor className="size-4" />}
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
-            <DropdownMenuLabel>Theme</DropdownMenuLabel>
+            <DropdownMenuLabel>{t("Theme")}</DropdownMenuLabel>
             {([
               ["system", Monitor, "System default", "Follow your device setting"],
               ["light", Sun, "Light", "Bright, standard contrast"],
@@ -95,7 +95,7 @@ export function SiteHeader({ title, subtitle }: { title: string; subtitle?: stri
           </Avatar>
           <div className="hidden flex-col leading-tight lg:flex">
             <span className="text-sm font-semibold">{user?.name}</span>
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{user ? ROLE_LABELS[user.role] : ""}</span>
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{user ? t(ROLE_LABELS[user.role] ?? user.role) : ""}</span>
           </div>
         </Link>
       </div>

@@ -67,8 +67,8 @@ export function ImageAnnotations() {const{t}=usePreferences();
             onChange={(e) => setAnnotationType(e.target.value)}
             className="w-full mt-1 rounded-md border p-2"
           >
-            <option value="marker">Marker</option>
-            <option value="measurement">Measurement</option>
+            <option value="marker">{t("Marker")}</option>
+            <option value="measurement">{t("Measurement")}</option>
             <option value="text">{t("Text Note")}</option>
             <option value="voice">{t("Voice Note")}</option>
           </select>

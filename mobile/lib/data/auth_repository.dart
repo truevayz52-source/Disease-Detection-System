@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api_client.dart';
+import 'biometric_auth.dart';
 import 'image_cache.dart';
 import 'models.dart';
 import 'offline_accounts.dart';
@@ -41,6 +43,7 @@ class AuthRepository extends ChangeNotifier {
   /// server is unreachable; only a definitive rejection clears the session.
   Future<void> restore() async {
     try {
+      await _api.ready; // resolve a reachable server before session checks
       debugPrint('[auth] restore: reading secure store');
       _api.token = await SecureStore.read(
         _tokenKey,
@@ -147,6 +150,12 @@ class AuthRepository extends ChangeNotifier {
     offlineSession = false;
     await SecureStore.write(_tokenKey, _api.token!);
     await _writeUser(res['user'] as Map<String, dynamic>);
+    // Remember the address for biometric/offline prefill on the next visit.
+    unawaited(
+      SharedPreferences.getInstance().then(
+        (p) => p.setString('dds_last_email', email),
+      ),
+    );
     await _accounts.save(
       email: email,
       password: password,
@@ -154,6 +163,14 @@ class AuthRepository extends ChangeNotifier {
       token: _api.token,
       has2fa: code != null && code.isNotEmpty,
     );
+    // Offer biometric enrollment for offline sign-in on supported devices.
+    try {
+      if (await BiometricAuth.isAvailable) {
+        await BiometricAuth.enroll(email);
+      }
+    } catch (e) {
+      debugPrint('[auth] biometric enrollment failed: $e');
+    }
     notifyListeners();
     onSessionReady?.call();
   }
@@ -174,7 +191,91 @@ class AuthRepository extends ChangeNotifier {
       await _writeUser(acct.user);
       notifyListeners();
     } on OfflineAuthException catch (e) {
+      debugPrint('[auth] offline sign-in failed: ${e.kind} — ${e.message}');
       throw ApiException(0, e.message);
+    }
+  }
+
+  /// Sign in with device biometrics (fingerprint / Face ID). The OS prompt
+  /// replaces the password check; the stored offline account snapshot is
+  /// restored if the prompt succeeds. When the server is reachable the
+  /// stored token is validated against `/auth/me` — a live session upgrades
+  /// to a real online session, while an expired/absent token asks for the
+  /// password instead of entering a session that would die on first sync.
+  Future<void> signInWithBiometric(String email) async {
+    OfflineAccount acct;
+    try {
+      final found = await BiometricAuth.authenticate(email);
+      if (found == null) {
+        throw ApiException(0, tr('Biometric sign-in failed or was cancelled.'));
+      }
+      acct = found;
+    } on OfflineAuthException catch (e) {
+      debugPrint('[auth] biometric sign-in failed: ${e.kind} — ${e.message}');
+      throw ApiException(0, e.message);
+    }
+
+    if (await _serverReachable()) {
+      if (acct.token == null) {
+        throw ApiException(
+          0,
+          tr('Sign in with your password once to refresh this device.'),
+        );
+      }
+      _api.token = acct.token;
+      try {
+        final res = await _api
+            .get('/auth/me', useCache: false)
+            .timeout(const Duration(seconds: 10));
+        user = SessionUser.fromJson(res['user'] as Map<String, dynamic>);
+        offlineSession = false;
+        await SecureStore.write(_tokenKey, acct.token!);
+        await _writeUser(res['user'] as Map<String, dynamic>);
+        await _accounts.updateSession(
+          email,
+          user: res['user'] as Map<String, dynamic>,
+          token: acct.token,
+        );
+        unawaited(
+          SharedPreferences.getInstance().then(
+            (p) => p.setString('dds_last_email', email),
+          ),
+        );
+        notifyListeners();
+        onSessionReady?.call();
+        return;
+      } on ApiException catch (e) {
+        if (e.status == 401) {
+          _api.token = null;
+          throw ApiException(
+            0,
+            tr('Saved session expired — sign in with your password.'),
+          );
+        }
+        rethrow;
+      }
+    }
+
+    _api.token = acct.token; // may be stale — GETs fall back to cache
+    user = SessionUser.fromJson(acct.user);
+    offlineSession = true;
+    if (acct.token != null) {
+      await SecureStore.write(_tokenKey, acct.token!);
+    }
+    await _writeUser(acct.user);
+    notifyListeners();
+  }
+
+  /// True when `/health` answers — decides whether biometric unlock can be
+  /// upgraded to a live session or must stay an offline one.
+  Future<bool> _serverReachable() async {
+    try {
+      await _api
+          .get('/health', useCache: false)
+          .timeout(const Duration(seconds: 6));
+      return true;
+    } catch (_) {
+      return false;
     }
   }
 

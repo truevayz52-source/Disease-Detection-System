@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:go_router/go_router.dart';
@@ -10,6 +12,7 @@ import 'data/draft_store.dart';
 import 'data/sync_service.dart';
 import 'data/translation_service.dart';
 import 'l10n/app_localizations.dart';
+import 'l10n/fallback_localizations.dart';
 import 'l10n/language_provider.dart';
 import 'router.dart';
 import 'ui/theme.dart';
@@ -34,11 +37,13 @@ class _DdsAppState extends State<DdsApp> {
   void initState() {
     super.initState();
     _api = ApiClient();
+    unawaited(_api.init());
     _auth = AuthRepository(_api);
     _api.onUnauthorized = _auth.handleUnauthorized;
     _sync = SyncService(_api, DdsRepository(_api), OfflineQueue());
     _api.onReachability = _sync.setReachable;
     _lang = LanguageProvider();
+    _lang.bindApi(_api);
     _auth.onSessionReady = () {
       _sync.prefetchBasics();
       _lang.adoptUserLanguage(_auth.user?.language);
@@ -63,12 +68,21 @@ class _DdsAppState extends State<DdsApp> {
         builder: (context) {
           final lang = context.watch<LanguageProvider>();
           return MaterialApp.router(
-            title: 'Disease Detection System',
+            title: tr('Disease Detection System'),
             theme: ddsTheme(),
             routerConfig: _router,
             locale: lang.locale,
             supportedLocales: kLanguageLocales,
+            // Fallback delegates come FIRST: they serve English chrome for
+            // every locale. The Global* delegates override them wherever a
+            // real translation exists — without the fallbacks, switching to a
+            // code Flutter doesn't ship (nd/kck/sbn/huc/nmq/ndc/toi/ts/ve/zsl)
+            // leaves MaterialLocalizations absent and every Scaffold drawer
+            // throws "No MaterialLocalizations found".
             localizationsDelegates: const [
+              fallbackMaterialLocalizations,
+              fallbackWidgetsLocalizations,
+              fallbackCupertinoLocalizations,
               appLocalizationsDelegate,
               GlobalMaterialLocalizations.delegate,
               GlobalWidgetsLocalizations.delegate,

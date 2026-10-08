@@ -35,7 +35,7 @@ class TranslationService {
   static const _geminiKey = String.fromEnvironment('DDS_TRANSLATE_KEY');
   static const _geminiModel = String.fromEnvironment(
     'DDS_TRANSLATE_MODEL',
-    defaultValue: 'gemini-1.5-flash',
+    defaultValue: 'gemini-3.1-flash-lite',
   );
 
   static const _langNames = {

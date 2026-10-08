@@ -54,7 +54,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
   @override
   Widget build(BuildContext context) {
     return AppScaffold(
-      title: 'User Management',
+      title: tr('User Management'),
       actions: [IconButton(icon: const Icon(Icons.refresh), onPressed: _load)],
       child: _loading
           ? loadingOr(null)
@@ -175,7 +175,7 @@ class _AdminFacilitiesScreenState extends State<AdminFacilitiesScreen> {
   @override
   Widget build(BuildContext context) {
     return AppScaffold(
-      title: 'Facilities',
+      title: tr('Facilities'),
       actions: [IconButton(icon: const Icon(Icons.refresh), onPressed: _load)],
       child: _loading
           ? loadingOr(null)
@@ -283,7 +283,7 @@ class _AuditScreenState extends State<AuditScreen> {
   @override
   Widget build(BuildContext context) {
     return AppScaffold(
-      title: 'Audit Trail',
+      title: tr('Audit Trail'),
       actions: [IconButton(icon: const Icon(Icons.refresh), onPressed: _load)],
       child: _loading
           ? loadingOr(null)

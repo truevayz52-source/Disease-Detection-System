@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'server_resolver.dart';
 import '../l10n/app_localizations.dart';
 
 /// Mirrors client/src/lib/api.ts — attaches the JWT, normalizes errors and
@@ -27,17 +28,35 @@ class ApiException implements Exception {
 class ApiClient {
   /// Base URL of the DDS REST API (no trailing slash).
   ///
-  /// Override at build time:
-  ///   flutter run --dart-define DDS_API_URL=http://192.168.1.10:4000/api
-  ///
-  /// Defaults: Android emulator reaches the host machine via 10.0.2.2;
-  /// every other platform uses localhost.
-  static String get baseUrl {
-    const defined = String.fromEnvironment('DDS_API_URL');
-    if (defined.isNotEmpty) return defined;
-    if (!kIsWeb && Platform.isAndroid) return 'http://10.0.2.2:4000/api';
-    return 'http://localhost:4000/api';
+  /// Resolution order (see ServerResolver): user-saved override →
+  /// `DDS_API_URL` / `DDS_PUBLIC_URL` build-time defines → last-good URL →
+  /// platform default (10.0.2.2 on the Android emulator, localhost else).
+  /// `init()` probes the candidates and adopts the first reachable one;
+  /// the settings sheet can change it at runtime via [setBaseUrl].
+  ApiClient()
+    : _baseUrl =
+          ServerResolver.normalize(
+            const String.fromEnvironment('DDS_API_URL'),
+          ) ??
+          ServerResolver.platformDefault {
+    SharedPreferences.getInstance().then((p) {
+      final ts = p.getString('dds_last_live_get');
+      if (ts != null) lastLiveFetchAt = DateTime.tryParse(ts);
+    });
   }
+
+  String _baseUrl;
+  String get baseUrl => _baseUrl;
+
+  /// Completes once [init] has probed static candidates — AuthRepository's
+  /// restore awaits it so a cold start targets a verified server.
+  Future<void>? get ready => _init;
+  Future<void>? _init;
+  bool _resolving = false;
+
+  /// True while a low-bandwidth link is active (cellular / no wifi). Fed by
+  /// SyncService's connectivity listener; doubles request timeouts.
+  bool networkSlow = false;
 
   /// Bearer token for the active session; null when signed out.
   String? token;
@@ -58,12 +77,51 @@ class ApiClient {
   /// the offline banner. Hydrated from prefs so it survives restarts.
   DateTime? lastLiveFetchAt;
 
-  ApiClient() {
-    SharedPreferences.getInstance().then((p) {
-      final ts = p.getString('dds_last_live_get');
-      if (ts != null) lastLiveFetchAt = DateTime.tryParse(ts);
-    });
+  /// Probe static candidates once at startup and adopt the first reachable
+  /// URL. Discovery (beacon/subnet scan) stays opt-in — it's too slow for
+  /// the cold-start path.
+  Future<void> init() => _init ??= _resolve();
+
+  /// Persist a user-entered server address and start using it immediately.
+  Future<bool> setBaseUrl(String raw) async {
+    final url = ServerResolver.normalize(raw);
+    if (url == null) return false;
+    _baseUrl = url;
+    await ServerResolver.saveOverride(url);
+    return true;
   }
+
+  /// Drop the saved override and re-resolve from the remaining candidates.
+  Future<String> resetBaseUrl() async {
+    await ServerResolver.clearOverride();
+    return _resolve();
+  }
+
+  Future<String> _resolve() async {
+    if (_resolving) return _baseUrl;
+    _resolving = true;
+    try {
+      _baseUrl = await ServerResolver.resolve();
+      return _baseUrl;
+    } finally {
+      _resolving = false;
+    }
+  }
+
+  /// After repeated status-0 failures, drop the stale last-good pointer and
+  /// re-resolve — but never override an address the user set explicitly.
+  void _maybeReresolve() {
+    unawaited(() async {
+      await ServerResolver.invalidateLastGood(_baseUrl);
+      if (await ServerResolver.savedOverride() == _baseUrl) return;
+      await _resolve();
+    }());
+  }
+
+  Duration get _requestTimeout =>
+      networkSlow ? const Duration(seconds: 30) : const Duration(seconds: 15);
+  Duration get _uploadTimeout =>
+      networkSlow ? const Duration(seconds: 60) : const Duration(seconds: 30);
 
   Map<String, String> get _headers => {
     'accept': 'application/json',
@@ -91,13 +149,7 @@ class ApiClient {
 
     http.Response res;
     try {
-      res = await switch (method) {
-        'POST' => http.post(uri, headers: headers, body: encoded),
-        'PATCH' => http.patch(uri, headers: headers, body: encoded),
-        'PUT' => http.put(uri, headers: headers, body: encoded),
-        'DELETE' => http.delete(uri, headers: headers),
-        _ => http.get(uri, headers: headers),
-      }.timeout(const Duration(seconds: 15));
+      res = await _send(method, uri, headers, encoded);
       onReachability?.call(true);
       lastFromCache = false;
     } on SocketException {
@@ -141,6 +193,47 @@ class ApiClient {
     }
     if (!ct.contains('json')) return res.body;
     return jsonDecode(res.body);
+  }
+
+  /// Single network attempt, with one backoff retry on connection failures
+  /// for idempotent requests (GETs and the login check — login is safe to
+  /// replay: worst case the server issues a second JWT we discard).
+  /// Mutating POST/PATCH never auto-retry — the offline queue owns replay.
+  Future<http.Response> _send(
+    String method,
+    Uri uri,
+    Map<String, String> headers,
+    Object? body,
+  ) async {
+    final idempotent = method == 'GET' || uri.path.endsWith('/auth/login');
+    const attempts = 2;
+    for (var i = 0; i < (idempotent ? attempts : 1); i++) {
+      try {
+        if (i > 0) {
+          await Future<void>.delayed(const Duration(milliseconds: 800));
+        }
+        return await switch (method) {
+          'POST' => http.post(uri, headers: headers, body: body),
+          'PATCH' => http.patch(uri, headers: headers, body: body),
+          'PUT' => http.put(uri, headers: headers, body: body),
+          'DELETE' => http.delete(uri, headers: headers),
+          _ => http.get(uri, headers: headers),
+        }.timeout(i == 0 ? _requestTimeout : _requestTimeout * 2);
+      } on TimeoutException {
+        if (i + 1 == attempts || !idempotent) rethrow;
+      } on SocketException {
+        if (i + 1 == attempts || !idempotent) {
+          _maybeReresolve();
+          rethrow;
+        }
+      } on http.ClientException {
+        if (i + 1 == attempts || !idempotent) {
+          _maybeReresolve();
+          rethrow;
+        }
+      }
+    }
+    throw TimeoutException('request timed out'); // unreachable
   }
 
   /// When the network is unreachable, serve the cached GET response if we
@@ -187,7 +280,7 @@ class ApiClient {
       ..files.add(await http.MultipartFile.fromPath(field, filePath));
     http.StreamedResponse streamed;
     try {
-      streamed = await req.send().timeout(const Duration(seconds: 30));
+      streamed = await req.send().timeout(_uploadTimeout);
       onReachability?.call(true);
     } on SocketException {
       onReachability?.call(false);

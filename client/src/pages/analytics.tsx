@@ -54,7 +54,12 @@ const PALETTE = ["#2563eb", "#dc2626", "#16a34a", "#d97706", "#7c3aed", "#0891b2
 
 export default function AnalyticsPage() {const{t}=usePreferences();
   const { data: trends } = useSWR<Trends>("/analytics/trends?weeks=12", (u: string) => api(u))
-  const { data: clusters, mutate } = useSWR<ClusterRes>("/analytics/clusters", (u: string) => api(u))
+  // Refresh spatial clusters every 8 minutes so users see automatic outbreak detection results.
+  const { data: clusters, mutate } = useSWR<ClusterRes>(
+    "/analytics/clusters",
+    (u: string) => api(u),
+    { refreshInterval: 8 * 60 * 1000 },
+  )
   const { data: engine } = useSWR<{ python: boolean }>("/analytics/engine-status", (u: string) => api(u))
   const [detecting, setDetecting] = useState(false)
 
@@ -111,10 +116,13 @@ export default function AnalyticsPage() {const{t}=usePreferences();
             <Badge variant={engine?.python ? "default" : "secondary"}>
               {engine?.python ? "Python scikit-learn" : "Node fallback"}
             </Badge>
+            <span className="ml-2 text-xs">
+              Outbreak detection runs automatically every 8 minutes.
+            </span>
           </p>
           <Button variant="outline" size="sm" className="ml-auto" disabled={detecting} onClick={detectNow}>
             {detecting ? <Loader2 className="size-4 animate-spin" /> : <Radar className="size-4" />}
-            Run outbreak detection
+            Run now
           </Button>
         </div>
 
@@ -174,10 +182,10 @@ export default function AnalyticsPage() {const{t}=usePreferences();
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Category</TableHead>
-                    <TableHead>Province</TableHead>
-                    <TableHead className="text-right">Cases</TableHead>
-                    <TableHead>Centroid</TableHead>
+                    <TableHead>{t("Category")}</TableHead>
+                    <TableHead>{t("Province")}</TableHead>
+                    <TableHead className="text-right">{t("Cases")}</TableHead>
+                    <TableHead>{t("Centroid")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>

@@ -22,14 +22,39 @@ admin). It talks to the same Express API — run `pnpm dev:server` first, then:
 
 ```bash
 cd mobile
-flutter run                                    # desktop/web → localhost:4000
-flutter run -d android                         # emulator → 10.0.2.2:4000
-flutter run --dart-define DDS_API_URL=http://<host>:4000/api  # physical device
+flutter run                                    # desktop/web → localhost:4001
+flutter run -d android                         # emulator → 10.0.2.2:4001
+flutter run --dart-define DDS_API_URL=http://<host>:4001/api  # physical device
 ```
 
-The Vite dev server proxies `/api/*` to the Express API on :4000. The API calls
+The app can also find the server at runtime: the sign-in screen gear (or
+Profile → Security & connection) opens a server sheet with manual entry and
+**Find automatically** — it listens for the API's UDP discovery beacon (port
+40401, `DISCOVERY_BEACON=0` disables) and scans the local subnet. The last
+working address is remembered per device; `DDS_PUBLIC_URL` can be baked in
+as a fixed public endpoint. Biometric sign-in (fingerprint/Face ID) unlocks
+the device-activated offline account and validates the session live when
+online — enable it via the post-login prompt or Profile → Security.
+
+The Vite dev server proxies `/api/*` to the Express API on :4001. The API calls
 the Python analytics service with a 2.5s timeout and automatically falls back
 to a built-in Node implementation when it is down — the UI always works.
+
+Python services (all optional, all in `analytics/`, run via `C:\dds-venv`):
+
+| Service | Port | Script | Purpose |
+|---|---|---|---|
+| `main.py` | 8000 | `pnpm dev:analytics` | ML clustering/forecasting (Node fallback exists) |
+| `transcription.py` | 8001 | `pnpm dev:transcription` | Whisper VA transcription |
+| `pathology.py` | 8002 | `pnpm dev:pathology` | Specimen-image analysis for `POST /api/ai/pathology/analyze` — HF model via `PATHOLOGY_MODEL` (needs `requirements-pathology-ml.txt`), else deterministic `dds-patho-heuristic-1.0` baseline |
+
+## Integrations (admin → System Settings → Connected services)
+
+- **Pathology model** — `PATHOLOGY_INFERENCE_URL` (+ optional `PATHOLOGY_API_KEY`). Dev: `http://127.0.0.1:8002/analyze`.
+- **Regional bridge** — `POST /api/regional/push` sends district-level mortality *aggregates only* (never case data) to the configured targets: DHIS2 `dataValueSets` (`DHIS2_*` envs; dev points at the public demo `play.im.dhis2.org/stable-2-43-2`) and/or an OpenHIM FHIR channel (`OPENHIM_*` envs).
+- **WHO ICD-11** — register free at https://icd.who.int/icdapi → *View API access key* → set `WHO_CLIENT_ID`, `WHO_CLIENT_SECRET`, `WHO_ICD_RELEASE` (e.g. `2025-01`). Without it, the ICD picker uses bundled ICD-10.
+- **Email (SMTP)** — powers password reset + scheduled reports. Dev uses a free [Ethereal](https://ethereal.email) test mailbox (mail is captured in its web inbox, not delivered). For real delivery use a free tier such as Brevo (300/day, `smtp-relay.brevo.com:587`, no card required).
+- **AI translation** — `GEMINI_API_KEY` + `TRANSLATE_PROVIDER=gemini`; all text is de-identified before dispatch.
 
 ## Prerequisites
 
@@ -107,7 +132,34 @@ COMMUNITY_API_KEY=             # optional x-api-key gate on /api/community/repor
 WHISPER_URL=http://127.0.0.1:8001/transcribe   # batch transcription
 WHISPER_API_KEY=               # shared secret for the Python service
 WHISPER_WS_URL=                # optional; derived from WHISPER_URL (/stream)
+TRANSLATE_PROVIDER=gemini      # external AI provider for translate + AI assists
+TRANSLATE_MODEL=gemini-3.1-flash-lite
+GEMINI_API_KEY=                # server-side only; never shipped to clients
 ```
+
+### External AI calls — privacy guards
+
+All Gemini traffic is server-side through `server/src/lib/ai.ts` (and
+`/api/translate` for dynamic text). The contract, enforced for every call:
+
+1. **De-identification first** — record PII literals (names, IDs, facility,
+   provider) plus regex catches for ZW national IDs, phones, emails and
+   coordinates become ⟦n⟧ tokens before dispatch. A post-mask assertion
+   refuses the call if any caller-supplied literal survives.
+2. **Token round-trip** — ⟦n⟧ tokens in the response are re-substituted
+   server-side (or client-side for /api/translate), so authorised users see
+   readable text while the provider only ever saw tokens.
+3. **Aggregate-only explain** — `/api/ai/explain` accepts an allowlisted set
+   of aggregate keys (disease, district, counts, thresholds); record-level
+   fields are rejected with 400 before any external call.
+4. **No content in logs** — the audit trail records task, char count and
+   masked-field counts only; request/response text is never written.
+5. **Draft labelling** — every AI surface in the UI carries an
+   "AI-generated draft — verify" notice; nothing is persisted automatically.
+
+Endpoints: `POST /api/ai/summarize`, `POST /api/ai/extract` (VA transcript →
+structured notification fields), `POST /api/ai/explain` (alert narrative).
+All are `requireAuth` + rate-limited; extract/explain are role-scoped.
 
 ### Verbal-autopsy transcription
 

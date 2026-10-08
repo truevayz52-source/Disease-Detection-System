@@ -91,7 +91,7 @@ export function PeerReview() {const{t}=usePreferences();
                 placeholder={t("Review notes...")}
                 className="w-full mt-1 rounded-md border p-2 min-h-[60px]"
               />
-              <Label className="mt-2">Recommendation</Label>
+              <Label className="mt-2">{t("Recommendation")}</Label>
               <Input value={recommendation} onChange={(e) => setRecommendation(e.target.value)} placeholder={t("e.g., Confirm diagnosis, Request additional tests")} />
               <Button onClick={handleSubmitReview} disabled={submitting || !reviewNotes} className="mt-2">
                 {submitting ? "Submitting..." : "Submit Review"}

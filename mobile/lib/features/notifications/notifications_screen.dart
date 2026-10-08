@@ -98,7 +98,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     final mpdsr = _items.where((n) => n.isMaternalPerinatal).length;
 
     return AppScaffold(
-      title: 'Death Notifications',
+      title: tr('Death Notifications'),
       actions: [
         if (canCreate)
           IconButton(
@@ -120,31 +120,31 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 scrollDirection: Axis.horizontal,
                 children: [
                   _miniStat(
-                    'Records shown',
+                    tr('Records shown'),
                     _items.length,
                     Icons.assignment_outlined,
                     DdsColors.accentBlue,
                   ),
                   _miniStat(
-                    'Pending review',
+                    tr('Pending review'),
                     pending,
                     Icons.hourglass_top_outlined,
                     DdsColors.accentAmber,
                   ),
                   _miniStat(
-                    'Under review',
+                    tr('Under review'),
                     underReview,
                     Icons.biotech_outlined,
                     DdsColors.accentPurple,
                   ),
                   _miniStat(
-                    'Finalized',
+                    tr('Finalized'),
                     finalized,
                     Icons.fact_check_outlined,
                     DdsColors.accentEmerald,
                   ),
                   _miniStat(
-                    'MPDSR cases',
+                    tr('MPDSR cases'),
                     mpdsr,
                     Icons.child_care_outlined,
                     DdsColors.accentRed,
@@ -173,12 +173,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               children: [
                 _dropdown(
                   value: _status,
-                  items: const {
-                    'all': 'All statuses',
-                    'pending_review': 'Pending review',
-                    'under_review': 'Under review',
-                    'autopsy_complete': 'Autopsy complete',
-                    'finalized': 'Finalized',
+                  items: {
+                    'all': tr('All statuses'),
+                    'pending_review': tr('Pending review'),
+                    'under_review': tr('Under review'),
+                    'autopsy_complete': tr('Autopsy complete'),
+                    'finalized': tr('Finalized'),
                   },
                   onChanged: (v) {
                     setState(() => _status = v!);
@@ -188,7 +188,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 _dropdown(
                   value: _district,
                   items: {
-                    'all': 'All districts',
+                    'all': tr('All districts'),
                     for (final d in _districts) d: d,
                   },
                   onChanged: (v) {
@@ -198,9 +198,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 ),
                 _dropdown(
                   value: _newestFirst ? 'newest' : 'oldest',
-                  items: const {
-                    'newest': 'Newest first',
-                    'oldest': 'Oldest first',
+                  items: {
+                    'newest': tr('Newest first'),
+                    'oldest': tr('Oldest first'),
                   },
                   onChanged: (v) =>
                       setState(() => _newestFirst = v == 'newest'),
@@ -231,7 +231,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   : _error != null
                   ? loadingOr(_error, onRetry: _load)
                   : items.isEmpty
-                  ? const EmptyState('No notifications match your filters.')
+                  ? EmptyState(tr('No notifications match your filters.'))
                   : Column(
                       children: [
                         for (final n in items)

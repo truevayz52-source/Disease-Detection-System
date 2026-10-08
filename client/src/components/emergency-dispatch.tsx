@@ -55,11 +55,11 @@ export function EmergencyDispatch() {const{t}=usePreferences();
           <Input value={recipients} onChange={(e) => setRecipients(e.target.value)} placeholder={t("user-id-1, user-id-2")} />
         </div>
         <div>
-          <Label>Subject</Label>
+          <Label>{t("Subject")}</Label>
           <Input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder={t("Emergency alert subject")} />
         </div>
         <div>
-          <Label>Message</Label>
+          <Label>{t("Message")}</Label>
           <textarea
             value={message}
             onChange={(e) => setMessage(e.target.value)}
@@ -68,12 +68,12 @@ export function EmergencyDispatch() {const{t}=usePreferences();
           />
         </div>
         <div>
-          <Label>Channels</Label>
+          <Label>{t("Channels")}</Label>
           <div className="flex gap-2 mt-2">
             {[
-              { id: "email", icon: Mail, label: "Email" },
-              { id: "sms", icon: Phone, label: "SMS" },
-              { id: "whatsapp", icon: MessageSquare, label: "WhatsApp" },
+              { id: "email", icon: Mail, label: t("Email") },
+              { id: "sms", icon: Phone, label: t("SMS") },
+              { id: "whatsapp", icon: MessageSquare, label: t("WhatsApp") },
             ].map((channel) => (
               <Button
                 key={channel.id}

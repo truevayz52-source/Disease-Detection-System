@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, useMemo, type ReactNode
 import { api } from "./api"
 import { useAuth } from "./auth"
 import languagesMetaJson from "../i18n/languages.json"
+import { setDateLocale } from "./format"
 
 // Canonical 16-language registry (synced from i18n/languages.json).
 export type Language = keyof typeof languagesMetaJson
@@ -18,16 +19,23 @@ export const languageInfo = (code: string): LanguageInfo => LANGUAGES[code as La
 
 // Dictionaries are lazy-imported from client/src/i18n/<code>.json
 // (synced from the canonical i18n/lang/ source — run `pnpm i18n:sync`).
+// When online, the latest overlay is fetched from `/api/i18n/:lang` and
+// merged on top, so updated or generated translations apply without a rebuild.
 type Dict = Record<string, string>
 const loaders = import.meta.glob<{ default: Dict }>("../i18n/*.json")
 const dicts: Record<string, Dict> = {}
 const pending: Record<string, Promise<Dict>> = {}
 function loadDict(code: string): Promise<Dict> {
   if (dicts[code]) return Promise.resolve(dicts[code])
-  pending[code] ??=
+  pending[code] ??= Promise.all([
     loaders[`../i18n/${code}.json`]?.()
-      .then((m) => (dicts[code] = m.default ?? {}))
-      .catch(() => (dicts[code] = {})) ?? Promise.resolve({})
+      .then((m) => (m.default ?? {}))
+      .catch(() => ({})) ?? Promise.resolve({}),
+    api(`/api/i18n/${code}`).catch(() => ({} as Dict)),
+  ]).then(([bundled, remote]) => {
+    dicts[code] = { ...bundled, ...(remote as Dict) }
+    return dicts[code]
+  })
   return pending[code]
 }
 void loadDict("en")
@@ -86,6 +94,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const info = languageInfo(language)
     document.documentElement.lang = info.written ? language : "en"
+    setDateLocale(info.written ? `${language}-ZW` : "en-GB")
     localStorage.setItem("dds_language", language)
     void loadDict(language).then(setDict)
   }, [language])

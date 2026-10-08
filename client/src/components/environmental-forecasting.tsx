@@ -44,7 +44,7 @@ export function EnvironmentalForecasting() {const{t}=usePreferences();
       <CardContent className="space-y-4">
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <Label>District</Label>
+            <Label>{t("District")}</Label>
             <Input value={district} onChange={(e) => setDistrict(e.target.value)} placeholder={t("Enter district")} />
           </div>
           <div>
@@ -54,9 +54,9 @@ export function EnvironmentalForecasting() {const{t}=usePreferences();
               onChange={(e) => setDataType(e.target.value)}
               className="w-full mt-1 rounded-md border p-2"
             >
-              <option value="rainfall">Rainfall</option>
-              <option value="temperature">Temperature</option>
-              <option value="humidity">Humidity</option>
+              <option value="rainfall">{t("Rainfall")}</option>
+              <option value="temperature">{t("Temperature")}</option>
+              <option value="humidity">{t("Humidity")}</option>
               <option value="water_level">{t("Water Level")}</option>
             </select>
           </div>

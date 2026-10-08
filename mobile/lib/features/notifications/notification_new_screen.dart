@@ -25,10 +25,10 @@ class NotificationNewScreen extends StatefulWidget {
 }
 
 class _NotificationNewScreenState extends State<NotificationNewScreen> {
-  static const _steps = [
-    'Patient demographics',
-    'Death details',
-    'Review & submit',
+  static final _steps = [
+    tr('Patient demographics'),
+    tr('Death details'),
+    tr('Review & submit'),
   ];
 
   final _drafts = DraftStore();
@@ -237,7 +237,7 @@ class _NotificationNewScreenState extends State<NotificationNewScreen> {
   @override
   Widget build(BuildContext context) {
     return AppScaffold(
-      title: 'New Death Notification',
+      title: tr('New Death Notification'),
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -344,16 +344,16 @@ class _NotificationNewScreenState extends State<NotificationNewScreen> {
   }
 
   Widget _stepDemographics() => SectionCard(
-    title: 'Patient demographics',
-    subtitle: "Deceased person's identity details",
+    title: tr('Patient demographics'),
+    subtitle: tr("Deceased person's identity details"),
     child: Column(
       children: [
-        _field('Full name *', (v) => fullName = v, initial: fullName),
+        _field(tr('Full name *'), (v) => fullName = v, initial: fullName),
         Row(
           children: [
             Expanded(
               child: _field(
-                'National ID',
+                tr('National ID'),
                 (v) => nationalId = v,
                 initial: nationalId,
                 hint: '63-204918A12',
@@ -362,17 +362,22 @@ class _NotificationNewScreenState extends State<NotificationNewScreen> {
             const SizedBox(width: 12),
             SizedBox(
               width: 90,
-              child: _field('Age', (v) => age = v, initial: age, numeric: true),
+              child: _field(
+                tr('Age'),
+                (v) => age = v,
+                initial: age,
+                numeric: true,
+              ),
             ),
           ],
         ),
-        _dropdownField('Gender *', gender, const {
-          'male': 'Male',
-          'female': 'Female',
-          'other': 'Other',
+        _dropdownField(tr('Gender *'), gender, {
+          'male': tr('Male'),
+          'female': tr('Female'),
+          'other': tr('Other'),
         }, (v) => setState(() => gender = v ?? '')),
         _field(
-          'Residential address',
+          tr('Residential address'),
           (v) => residentialAddress = v,
           initial: residentialAddress,
         ),
@@ -380,7 +385,7 @@ class _NotificationNewScreenState extends State<NotificationNewScreen> {
           children: [
             Expanded(
               child: _field(
-                'Latitude (optional)',
+                tr('Latitude (optional)'),
                 (v) => latitude = v,
                 initial: latitude,
                 hint: '-17.82',
@@ -390,7 +395,7 @@ class _NotificationNewScreenState extends State<NotificationNewScreen> {
             const SizedBox(width: 12),
             Expanded(
               child: _field(
-                'Longitude (optional)',
+                tr('Longitude (optional)'),
                 (v) => longitude = v,
                 initial: longitude,
                 hint: '31.05',
@@ -404,8 +409,8 @@ class _NotificationNewScreenState extends State<NotificationNewScreen> {
   );
 
   Widget _stepDeathDetails() => SectionCard(
-    title: 'Death details',
-    subtitle: 'Facility, date/time and preliminary ICD cause',
+    title: tr('Death details'),
+    subtitle: tr('Facility, date/time and preliminary ICD cause'),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -597,23 +602,23 @@ class _NotificationNewScreenState extends State<NotificationNewScreen> {
         .map((f) => f.facilityName)
         .firstOrNull;
     return SectionCard(
-      title: 'Review & submit',
-      subtitle: 'Verify details before committing the record',
+      title: tr('Review & submit'),
+      subtitle: tr('Verify details before committing the record'),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          InfoRow('Patient', fullName),
-          InfoRow('National ID', nationalId.isEmpty ? '—' : nationalId),
-          InfoRow('Age / Gender', '${age.isEmpty ? '—' : age} / $gender'),
+          InfoRow(tr('Patient'), fullName),
+          InfoRow(tr('National ID'), nationalId.isEmpty ? '—' : nationalId),
+          InfoRow(tr('Age / Gender'), '${age.isEmpty ? '—' : age} / $gender'),
           InfoRow(
-            'Address',
+            tr('Address'),
             residentialAddress.isEmpty ? '—' : residentialAddress,
           ),
-          InfoRow('Facility', facilityName ?? facilityId),
-          InfoRow('Date of death', fmtDateTime(dateOfDeath)),
-          InfoRow('Preliminary ICD', '$icdCode — $icdDesc'),
+          InfoRow(tr('Facility'), facilityName ?? facilityId),
+          InfoRow(tr('Date of death'), fmtDateTime(dateOfDeath)),
+          InfoRow(tr('Preliminary ICD'), '$icdCode — $icdDesc'),
           InfoRow(
-            'MPDSR',
+            tr('MPDSR'),
             isMaternalPerinatal ? tr('Yes — alert will be raised') : tr('No'),
           ),
           if (clinicalSummary.isNotEmpty) ...[

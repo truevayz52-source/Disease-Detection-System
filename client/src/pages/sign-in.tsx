@@ -9,6 +9,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { useAuth } from "@/lib/auth"
 import { ApiError } from "@/lib/api"
 import { usePreferences } from "@/lib/preferences"
+import { LanguageMenu } from "@/components/language-menu"
 
 export default function SignInPage() {const{t}=usePreferences();
   const navigate = useNavigate()
@@ -39,26 +40,26 @@ export default function SignInPage() {const{t}=usePreferences();
     {
       icon: Activity,
       title: t("Outbreak detection"),
-      desc: "Real-time mortality surveillance, automated threshold alerts & early cluster warnings",
-      tag: "Live Surveillance",
+      desc: t("Real-time mortality surveillance, automated threshold alerts & early cluster warnings"),
+      tag: t("Live Surveillance"),
     },
     {
       icon: FileSearch,
       title: t("Tele-pathology"),
-      desc: "Remote digital specimen review and authenticated digital autopsy certification",
-      tag: "Digital Forensics",
+      desc: t("Remote digital specimen review and authenticated digital autopsy certification"),
+      tag: t("Digital Forensics"),
     },
     {
       icon: MapPin,
       title: t("GIS analytics"),
-      desc: "District → provincial → national disease mapping, hotspot heatmaps and spatial mortality patterns",
-      tag: "Geospatial Intel",
+      desc: t("District → provincial → national disease mapping, hotspot heatmaps and spatial mortality patterns"),
+      tag: t("Geospatial Intel"),
     },
     {
       icon: WifiOff,
       title: t("Offline field sync"),
-      desc: "Capture mortality data in the field without connectivity — records queue locally and sync when back online",
-      tag: "Field Ready",
+      desc: t("Capture mortality data in the field without connectivity — records queue locally and sync when back online"),
+      tag: t("Field Ready"),
     },
   ]
 
@@ -80,10 +81,10 @@ export default function SignInPage() {const{t}=usePreferences();
           <div className="flex flex-col items-start text-left w-full max-w-lg gap-4">
             <div>
               <h1 className="text-2xl font-bold tracking-tight lg:text-3xl text-white">
-                Disease Detection System
+                {t("Disease Detection System")}
               </h1>
               <p className="mt-1 text-sm font-medium text-emerald-400">
-                Ministry of Health and Child Care — Zimbabwe
+                {t("Ministry of Health and Child Care — Zimbabwe")}
               </p>
             </div>
 
@@ -115,12 +116,15 @@ export default function SignInPage() {const{t}=usePreferences();
       </div>
 
       {/* Right — sign-in form (fully compatible with white background) */}
-      <div className="flex h-full min-h-0 justify-center overflow-y-auto bg-white p-4 sm:p-6 lg:p-10">
+      <div className="relative flex h-full min-h-0 justify-center overflow-y-auto bg-white p-4 sm:p-6 lg:p-10">
+        <div className="absolute right-4 top-4">
+          <LanguageMenu />
+        </div>
         <div className="my-auto w-full max-w-md space-y-4 [@media(max-height:700px)]:space-y-2">
           {/* Mobile top branding badge */}
           <div className="text-center lg:hidden pb-1">
             <p className="text-xs font-semibold tracking-wider uppercase text-primary">
-              Ministry of Health and Child Care · Zimbabwe
+              {t("Ministry of Health and Child Care · Zimbabwe")}
             </p>
           </div>
 
@@ -132,10 +136,10 @@ export default function SignInPage() {const{t}=usePreferences();
                 className="mx-auto mb-2.5 h-16 [@media(max-height:700px)]:h-11 w-auto object-contain drop-shadow-sm"
               />
               <CardTitle className="text-xl font-bold tracking-tight text-black">
-                Sign in to DDS
+                {t("Sign in to DDS")}
               </CardTitle>
               <CardDescription className="text-xs text-black font-medium">
-                Disease Detection System
+                {t("Disease Detection System")}
               </CardDescription>
             </CardHeader>
 
@@ -149,7 +153,7 @@ export default function SignInPage() {const{t}=usePreferences();
 
                 <div className="space-y-1.5">
                   <Label htmlFor="email" className="text-sm font-bold text-black">
-                    Email Address
+                    {t("Email Address")}
                   </Label>
                   <Input
                     id="email"
@@ -165,7 +169,7 @@ export default function SignInPage() {const{t}=usePreferences();
 
                 <div className="space-y-1.5">
                   <Label htmlFor="password" className="text-sm font-bold text-black">
-                    Password
+                    {t("Password")}
                   </Label>
                   <div className="relative">
                     <Input
@@ -183,7 +187,7 @@ export default function SignInPage() {const{t}=usePreferences();
                       onClick={() => setShowPassword(!showPassword)}
                       tabIndex={0}
                       className="absolute right-2.5 top-1/2 -translate-y-1/2 text-black hover:text-black/70 transition-colors p-1 rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 cursor-pointer"
-                      aria-label={showPassword ? "Hide password" : "Show password"}
+                      aria-label={showPassword ? t("Hide password") : t("Show password")}
                     >
                       {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                     </button>
@@ -198,7 +202,7 @@ export default function SignInPage() {const{t}=usePreferences();
                 )}
                 <Button type="submit" className="h-10 w-full font-semibold shadow-md mt-2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white transition-all cursor-pointer" disabled={loading}>
                   {loading && <Loader2 className="size-4 animate-spin mr-2" />}
-                  Sign in
+                  {t("Sign in")}
                 </Button>
                 <Link to="/forgot-password" className="block text-center text-sm underline text-blue-600 hover:text-blue-700">{t("Forgot password?")}</Link>
               </form>
@@ -206,7 +210,7 @@ export default function SignInPage() {const{t}=usePreferences();
 
             <CardFooter className="border-t-2 border-slate-200 bg-slate-50/90 px-6 py-3.5 [@media(max-height:700px)]:py-2 rounded-b-2xl">
               <p className="w-full text-center text-xs text-black font-medium">
-                Authorised personnel only.
+                {t("Authorised personnel only.")}
               </p>
             </CardFooter>
           </Card>

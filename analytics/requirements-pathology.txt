@@ -1,0 +1,8 @@
+# Pathology inference service (analytics/pathology.py) — port 8002.
+# Lightweight default backend; add requirements-pathology-ml.txt for the
+# Hugging Face model path (PATHOLOGY_MODEL env).
+fastapi==0.118.0
+uvicorn[standard]==0.37.0
+python-multipart==0.0.20
+pillow==11.3.0
+numpy==2.3.3

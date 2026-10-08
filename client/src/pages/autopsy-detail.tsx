@@ -12,6 +12,7 @@ import { useAuth } from "@/lib/auth"
 import { fmtDate, fmtDateTime, STATUS_LABELS, STATUS_VARIANTS } from "@/lib/format"
 import { usePreferences } from "@/lib/preferences"
 import { TranslatedBlock } from "@/components/translated-block"
+import { AiSummaryBlock } from "@/components/ai-block"
 
 interface AutopsyFull {
   autopsy_id: string
@@ -75,7 +76,7 @@ export default function AutopsyDetailPage() {const{t}=usePreferences();
               <CardTitle className="text-base">{a.patient_name}</CardTitle>
               <div className="flex gap-2">
                 {!!a.legal_threshold_flag && <Badge variant="destructive">{t("Legal threshold")}</Badge>}
-                <Badge variant={STATUS_VARIANTS[a.status] ?? "secondary"}>{STATUS_LABELS[a.status] ?? a.status}</Badge>
+                <Badge variant={STATUS_VARIANTS[a.status] ?? "secondary"}>{t(STATUS_LABELS[a.status] ?? a.status)}</Badge>
               </div>
             </CardHeader>
             <CardContent>
@@ -86,7 +87,7 @@ export default function AutopsyDetailPage() {const{t}=usePreferences();
                 <dd>{a.age ?? "—"} / {a.gender}</dd>
                 <dt className="text-muted-foreground">{t("Date of death")}</dt>
                 <dd>{fmtDateTime(a.date_of_death)}</dd>
-                <dt className="text-muted-foreground">Facility</dt>
+                <dt className="text-muted-foreground">{t("Facility")}</dt>
                 <dd>{a.facility_name}, {a.district}</dd>
                 <dt className="text-muted-foreground">{t("Preliminary ICD")}</dt>
                 <dd>{a.preliminary_icd_code}</dd>
@@ -94,14 +95,17 @@ export default function AutopsyDetailPage() {const{t}=usePreferences();
                 <dd className="font-medium">{a.final_icd_code ?? "—"}</dd>
                 <dt className="text-muted-foreground">{t("Final cause of death")}</dt>
                 <dd className="font-medium">{a.final_cause_of_death ? <TranslatedBlock text={a.final_cause_of_death} pii={piiFields} /> : "—"}</dd>
-                <dt className="text-muted-foreground">Pathologist</dt>
+                <dt className="text-muted-foreground">{t("Pathologist")}</dt>
                 <dd>{a.pathologist_name}</dd>
                 <dt className="text-muted-foreground">{t("Digital signature")}</dt>
                 <dd className="font-serif italic">{a.digital_signature ?? "—"}</dd>
-                <dt className="text-muted-foreground">Finalized</dt>
+                <dt className="text-muted-foreground">{t("Finalized")}</dt>
                 <dd>{fmtDateTime(a.finalized_at)}</dd>
                 <dt className="text-muted-foreground">{t("Internal observations")}</dt>
-                <dd className="sm:col-span-1 whitespace-pre-wrap">{a.internal_observations ? <TranslatedBlock text={a.internal_observations} pii={piiFields} /> : "—"}</dd>
+                <dd className="sm:col-span-1 whitespace-pre-wrap">
+                  {a.internal_observations ? <TranslatedBlock text={a.internal_observations} pii={piiFields} /> : "—"}
+                  <AiSummaryBlock className="mt-2" text={a.internal_observations} pii={piiFields} />
+                </dd>
                 <dt className="text-muted-foreground">{t("Toxicology results")}</dt>
                 <dd className="sm:col-span-1 whitespace-pre-wrap">{a.toxicology_results ? <TranslatedBlock text={a.toxicology_results} pii={piiFields} /> : "—"}</dd>
               </dl>
@@ -111,10 +115,10 @@ export default function AutopsyDetailPage() {const{t}=usePreferences();
           <div className="space-y-4">
             <Card className="shadow-lg">
               <CardHeader>
-                <CardTitle className="text-sm">Integrity</CardTitle>
+                <CardTitle className="text-sm">{t("Integrity")}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2 text-xs">
-                <p className="text-muted-foreground">Audit hash (SHA-256):</p>
+                <p className="text-muted-foreground">{t("Audit hash (SHA-256):")}</p>
                 <p className="break-all font-mono">{a.audit_hash}</p>
                 <p className="text-muted-foreground">Created {fmtDate(a.created_at)} · Report {a.autopsy_id}</p>
               </CardContent>

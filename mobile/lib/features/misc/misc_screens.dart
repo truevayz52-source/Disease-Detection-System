@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 
 import '../../data/api_client.dart';
 import '../../data/auth_repository.dart';
+import '../../data/biometric_auth.dart';
+import '../../data/offline_accounts.dart';
 import '../../data/models.dart';
 import '../../ui/app_shell.dart';
 import '../../ui/theme.dart';
@@ -20,7 +22,7 @@ class ProfileScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final user = context.watch<AuthRepository>().user;
     return AppScaffold(
-      title: 'Profile',
+      title: tr('Profile'),
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -82,15 +84,18 @@ class ProfileScreen extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           SectionCard(
-            title: 'Account details',
+            title: tr('Account details'),
             child: Column(
               children: [
-                InfoRow('Role', tr(kRoleLabels[user?.role] ?? '—')),
-                InfoRow('Facility', user?.facilityId ?? tr('National scope')),
-                InfoRow('Province', user?.province ?? '—'),
-                InfoRow('District', user?.district ?? '—'),
-                InfoRow('Phone', user?.phone ?? '—'),
-                InfoRow('Department', user?.department ?? '—'),
+                InfoRow(tr('Role'), tr(kRoleLabels[user?.role] ?? '—')),
+                InfoRow(
+                  tr('Facility'),
+                  user?.facilityId ?? tr('National scope'),
+                ),
+                InfoRow(tr('Province'), user?.province ?? '—'),
+                InfoRow(tr('District'), user?.district ?? '—'),
+                InfoRow(tr('Phone'), user?.phone ?? '—'),
+                InfoRow(tr('Department'), user?.department ?? '—'),
                 // Language selector — all 16 official languages, instant
                 // switch + profile sync (LanguageProvider handles both).
                 Padding(
@@ -131,11 +136,13 @@ class ProfileScreen extends StatelessWidget {
                     ],
                   ),
                 ),
-                InfoRow('Timezone', user?.timezone ?? '—'),
-                InfoRow('Last login', fmtDateTime(user?.lastLoginAt)),
+                InfoRow(tr('Timezone'), user?.timezone ?? '—'),
+                InfoRow(tr('Last login'), fmtDateTime(user?.lastLoginAt)),
               ],
             ),
           ),
+          const SizedBox(height: 16),
+          SecurityCard(email: user?.email ?? ''),
           const SizedBox(height: 16),
           FilledButton.icon(
             style: FilledButton.styleFrom(
@@ -383,7 +390,9 @@ class ComingSoonScreen extends StatelessWidget {
               const SizedBox(height: 6),
               Text(
                 tr(
-                  'This module is available in the web application and is being ported to mobile.',
+                  tr(
+                    'This module is available in the web application and is being ported to mobile.',
+                  ),
                 ),
                 textAlign: TextAlign.center,
                 style: TextStyle(
@@ -394,6 +403,116 @@ class ComingSoonScreen extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Security settings — biometric unlock toggle + device-settings deep link
+/// (when the phone has no enrolled fingerprint/face), plus the runtime
+/// server address so staff can retarget the API without a rebuild.
+class SecurityCard extends StatefulWidget {
+  const SecurityCard({super.key, required this.email});
+
+  final String email;
+
+  @override
+  State<SecurityCard> createState() => _SecurityCardState();
+}
+
+class _SecurityCardState extends State<SecurityCard> {
+  BiometricStatus? _status;
+  bool _enabled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final status = await BiometricAuth.status;
+    final acct = widget.email.isEmpty
+        ? null
+        : await OfflineAccountStore().getAccount(widget.email);
+    if (!mounted) return;
+    setState(() {
+      _status = status;
+      _enabled = acct?.biometricEnabled == true;
+    });
+  }
+
+  Future<void> _toggle(bool want) async {
+    if (widget.email.isEmpty) return;
+    if (want) {
+      final ok = await BiometricAuth.enroll(widget.email);
+      if (!mounted) return;
+      setState(() => _enabled = ok);
+      if (!ok) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(tr('Biometric setup was cancelled.'))),
+        );
+      }
+    } else {
+      await BiometricAuth.disable(widget.email);
+      if (mounted) setState(() => _enabled = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SectionCard(
+      title: tr('Security'),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.fingerprint, size: 20, color: DdsColors.primary),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      tr('Biometric sign-in'),
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    Text(
+                      switch (_status) {
+                        null => tr('Checking device…'),
+                        BiometricStatus.unavailable => tr(
+                          'Not supported on this device',
+                        ),
+                        BiometricStatus.notEnrolled => tr(
+                          'No fingerprint or face enrolled on this device',
+                        ),
+                        BiometricStatus.ready =>
+                          _enabled
+                              ? tr('Enabled for this account')
+                              : tr('Available — turn on to enable'),
+                      },
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: DdsColors.mutedForeground,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (_status == BiometricStatus.notEnrolled)
+                TextButton(
+                  onPressed: () => BiometricAuth.openSecuritySettings(),
+                  child: Text(tr('Open settings')),
+                )
+              else if (_status == BiometricStatus.ready)
+                Switch(value: _enabled, onChanged: _toggle),
+            ],
+          ),
+        ],
       ),
     );
   }

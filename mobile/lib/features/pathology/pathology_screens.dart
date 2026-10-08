@@ -65,7 +65,7 @@ class _PathologyQueueScreenState extends State<PathologyQueueScreen> {
   @override
   Widget build(BuildContext context) {
     return AppScaffold(
-      title: 'Pathology Review Queue',
+      title: tr('Pathology Review Queue'),
       actions: [IconButton(icon: const Icon(Icons.refresh), onPressed: _load)],
       child: _loading
           ? loadingOr(null)
@@ -85,9 +85,7 @@ class _PathologyQueueScreenState extends State<PathologyQueueScreen> {
                   ),
                   const SizedBox(height: 8),
                   if (_items.isEmpty)
-                    const Card(
-                      child: EmptyState('The pathology queue is clear.'),
-                    )
+                    Card(child: EmptyState(tr('The pathology queue is clear.')))
                   else
                     for (final n in _items)
                       Card(
@@ -300,7 +298,7 @@ class _PathologyReviewScreenState extends State<PathologyReviewScreen> {
     final images = d?.images ?? [];
 
     return AppScaffold(
-      title: 'Pathology Review',
+      title: tr('Pathology Review'),
       child: d == null
           ? loadingOr(_error, onRetry: _load)
           : ListView(
@@ -360,7 +358,7 @@ class _PathologyReviewScreenState extends State<PathologyReviewScreen> {
                     label: Text(tr('Upload')),
                   ),
                   child: images.isEmpty
-                      ? const EmptyState('No images uploaded yet.')
+                      ? EmptyState(tr('No images uploaded yet.'))
                       : Column(
                           children: [
                             ClipRRect(
@@ -419,18 +417,20 @@ class _PathologyReviewScreenState extends State<PathologyReviewScreen> {
                 const SizedBox(height: 16),
                 // Autopsy form
                 SectionCard(
-                  title: 'Autopsy findings',
-                  subtitle: 'Record findings and certify the cause of death',
+                  title: tr('Autopsy findings'),
+                  subtitle: tr(
+                    'Record findings and certify the cause of death',
+                  ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       _area(
-                        'Internal observations',
+                        tr('Internal observations'),
                         (v) => internalObservations = v,
                         initial: internalObservations,
                       ),
                       _area(
-                        'Toxicology results',
+                        tr('Toxicology results'),
                         (v) => toxicologyResults = v,
                         initial: toxicologyResults,
                       ),
@@ -504,7 +504,7 @@ class _PathologyReviewScreenState extends State<PathologyReviewScreen> {
                       TextField(
                         decoration: InputDecoration(
                           hintText: tr(
-                            'e.g. Acute severe cholera with dehydration',
+                            tr('e.g. Acute severe cholera with dehydration'),
                           ),
                         ),
                         onChanged: (v) => finalCauseOfDeath = v,

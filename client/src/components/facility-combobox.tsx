@@ -8,7 +8,8 @@ import { usePreferences } from "@/lib/preferences"
 
 /** Searchable facility picker — the full registry is ~4k entries, so a plain
  *  select is unusable; this filters as you type. */
-export function FacilityCombobox({ value, onChange }: { value: string; onChange: (v: string) => void }) {const{t}=usePreferences();
+export function FacilityCombobox({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const { t } = usePreferences()
   const { data } = useSWR<{ items: Facility[] }>("/facilities", (u: string) => api(u))
   const [open, setOpen] = useState(false)
   const [q, setQ] = useState("")

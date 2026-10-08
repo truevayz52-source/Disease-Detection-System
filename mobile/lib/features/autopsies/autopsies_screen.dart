@@ -57,7 +57,7 @@ class _AutopsiesScreenState extends State<AutopsiesScreen> {
   @override
   Widget build(BuildContext context) {
     return AppScaffold(
-      title: 'Autopsy Reports',
+      title: tr('Autopsy Reports'),
       actions: [IconButton(icon: const Icon(Icons.refresh), onPressed: _load)],
       child: _loading
           ? loadingOr(null)
@@ -67,9 +67,9 @@ class _AutopsiesScreenState extends State<AutopsiesScreen> {
               onRefresh: _load,
               child: _items.isEmpty
                   ? ListView(
-                      children: const [
-                        SizedBox(height: 80),
-                        EmptyState('No autopsy reports yet.'),
+                      children: [
+                        const SizedBox(height: 80),
+                        EmptyState(tr('No autopsy reports yet.')),
                       ],
                     )
                   : ListView.builder(
@@ -154,7 +154,9 @@ class _AutopsyDetailScreenState extends State<AutopsyDetailScreen> {
         title: Text(tr('Finalize autopsy?')),
         content: Text(
           tr(
-            'Finalizing locks the report, applies the digital signature and enables the death certificate.',
+            tr(
+              'Finalizing locks the report, applies the digital signature and enables the death certificate.',
+            ),
           ),
         ),
         actions: [
@@ -195,7 +197,7 @@ class _AutopsyDetailScreenState extends State<AutopsyDetailScreen> {
     final a = _a;
 
     return AppScaffold(
-      title: 'Autopsy Report',
+      title: tr('Autopsy Report'),
       child: a == null
           ? loadingOr(_error, onRetry: _load)
           : ListView(
@@ -233,12 +235,12 @@ class _AutopsyDetailScreenState extends State<AutopsyDetailScreen> {
                           ),
                         ),
                         const SizedBox(height: 14),
-                        InfoRow('Pathologist', a.pathologistName ?? '—'),
+                        InfoRow(tr('Pathologist'), a.pathologistName ?? '—'),
                         InfoRow(
-                          'Facility',
+                          tr('Facility'),
                           '${a.facilityName ?? '—'}${a.district != null ? ', ${a.district}' : ''}',
                         ),
-                        InfoRow('Final ICD', a.finalIcdCode ?? '—'),
+                        InfoRow(tr('Final ICD'), a.finalIcdCode ?? '—'),
                         if (a.finalCauseOfDeath != null) ...[
                           Text(
                             tr('Cause of death'),
@@ -270,9 +272,9 @@ class _AutopsyDetailScreenState extends State<AutopsyDetailScreen> {
                             ),
                           ),
                         if (a.finalizedAt != null)
-                          InfoRow('Finalized', fmtDateTime(a.finalizedAt)),
+                          InfoRow(tr('Finalized'), fmtDateTime(a.finalizedAt)),
                         if (a.digitalSignature != null)
-                          InfoRow('Signature', a.digitalSignature!),
+                          InfoRow(tr('Signature'), a.digitalSignature!),
                       ],
                     ),
                   ),
@@ -281,7 +283,7 @@ class _AutopsyDetailScreenState extends State<AutopsyDetailScreen> {
                 if (a.internalObservations != null &&
                     a.internalObservations!.isNotEmpty)
                   SectionCard(
-                    title: 'Internal observations',
+                    title: tr('Internal observations'),
                     child: TranslatedText(
                       a.internalObservations!,
                       pii: _recordPii(a),
@@ -291,7 +293,7 @@ class _AutopsyDetailScreenState extends State<AutopsyDetailScreen> {
                     a.toxicologyResults!.isNotEmpty) ...[
                   const SizedBox(height: 16),
                   SectionCard(
-                    title: 'Toxicology results',
+                    title: tr('Toxicology results'),
                     child: TranslatedText(
                       a.toxicologyResults!,
                       pii: _recordPii(a),
