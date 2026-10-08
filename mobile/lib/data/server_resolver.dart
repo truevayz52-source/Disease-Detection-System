@@ -12,6 +12,7 @@ void _log(String msg) => debugPrint('[server_resolver] $msg');
 /// can see whether they're on a saved address, a discovered LAN host, etc.
 enum ServerSource {
   saved,
+  pointer,
   dartDefine,
   publicUrl,
   lastGood,
@@ -24,10 +25,13 @@ enum ServerSource {
 /// order and the first reachable wins:
 ///
 ///   1. User-saved override (`dds_api_url` — set from the settings sheet)
-///   2. `DDS_API_URL` build-time dart-define
-///   3. `DDS_PUBLIC_URL` build-time dart-define (fixed public domain)
-///   4. Last-good URL (persisted after each successful resolve)
-///   5. Platform default — 10.0.2.2 on the Android emulator, localhost else
+///   2. `DDS_LOOKUP_URL` pointer — a tiny JSON record (e.g. Firebase RTDB)
+///      holding the *current* public URL; updated by deploy/sync-tunnel-url.mjs
+///      whenever the tunnel restarts, so builds never bake a dead address
+///   3. `DDS_API_URL` build-time dart-define
+///   4. `DDS_PUBLIC_URL` build-time dart-define (fixed public domain)
+///   5. Last-good URL (persisted after each successful resolve)
+///   6. Platform default — 10.0.2.2 on the Android emulator, localhost else
 ///
 /// [resolve] is fast: static candidates only. When none answer, callers can
 /// run discovery — a UDP beacon listener (the server broadcasts its address
@@ -37,7 +41,24 @@ class ServerResolver {
   static const defaultPort = 4001;
   static const _savedKey = 'dds_api_url';
   static const _lastGoodKey = 'dds_api_url_last_good';
+  static const _lookupUrl = String.fromEnvironment('DDS_LOOKUP_URL');
   static const _probeTimeout = Duration(seconds: 2);
+
+  /// Fetch the current API URL from the lookup pointer (Firebase RTDB or any
+  /// JSON endpoint returning a bare URL string). Returns null on any failure.
+  static Future<String?> _fetchPointer() async {
+    if (_lookupUrl.isEmpty) return null;
+    try {
+      final res = await http
+          .get(Uri.parse(_lookupUrl))
+          .timeout(const Duration(seconds: 4));
+      if (res.statusCode != 200) return null;
+      final body = jsonDecode(res.body);
+      return body is String ? body : null;
+    } catch (_) {
+      return null;
+    }
+  }
 
   /// Normalize user/built input to `scheme://host[:port]/api`.
   /// Accepts bare hosts/IPs (http assumed) and URLs without the /api suffix.
@@ -103,6 +124,9 @@ class ServerResolver {
     }
 
     add(prefs.getString(_savedKey), ServerSource.saved);
+    // The pointer reflects the freshest public URL (tunnel restarts) so it
+    // outranks baked-in defines and the last-good cache.
+    add(await _fetchPointer(), ServerSource.pointer);
     add(const String.fromEnvironment('DDS_API_URL'), ServerSource.dartDefine);
     add(const String.fromEnvironment('DDS_PUBLIC_URL'), ServerSource.publicUrl);
     add(prefs.getString(_lastGoodKey), ServerSource.lastGood);
