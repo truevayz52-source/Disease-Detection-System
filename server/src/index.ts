@@ -121,9 +121,12 @@ app.use("/api/ai", aiRouter)
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const clientDist = resolve(__dirname, "../../client/dist")
 if (existsSync(clientDist)) {
-  app.use(express.static(clientDist))
+  // index:false — HTML is served below with no-store so deploys reach
+  // browsers immediately; hashed assets under /assets keep long caching.
+  app.use(express.static(clientDist, { index: false }))
   app.get("*", (req, res, next) => {
     if (req.path.startsWith("/api/") || req.path.startsWith("/socket.io/")) return next()
+    res.setHeader("Cache-Control", "no-store")
     res.sendFile(join(clientDist, "index.html"))
   })
 }

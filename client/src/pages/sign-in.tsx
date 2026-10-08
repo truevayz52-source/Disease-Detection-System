@@ -116,7 +116,7 @@ export default function SignInPage() {const{t}=usePreferences();
       </div>
 
       {/* Right — sign-in form (fully compatible with white background) */}
-      <div className="relative flex h-full min-h-0 justify-center overflow-y-auto bg-white p-4 sm:p-6 xl:p-10">
+      <div className="relative flex h-full min-h-0 justify-center overflow-y-auto bg-gradient-to-br from-slate-50 via-white to-emerald-50/60 p-4 sm:p-6 xl:p-10">
         <div className="absolute right-4 top-4">
           <LanguageMenu />
         </div>
