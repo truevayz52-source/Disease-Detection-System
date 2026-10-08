@@ -1,6 +1,9 @@
 import express from "express"
 import { ServiceUnavailableError } from "./lib/integrations.js"
 import { createServer } from "node:http"
+import { existsSync } from "node:fs"
+import { dirname, join, resolve } from "node:path"
+import { fileURLToPath } from "node:url"
 import { attachRealtime } from "./websocket/index.js"
 import { attachVoiceStream } from "./routes/voice-stream.js"
 import { ZodError } from "zod"
@@ -111,6 +114,19 @@ app.use("/api", certificatesRouter)
 app.use("/api", translateRouter)
 app.use("/api/i18n", i18nRouter)
 app.use("/api/ai", aiRouter)
+
+// Production: serve the built web client so web + API share one origin —
+// a single tunnel then exposes the whole app. In dev `client/dist` does not
+// exist and Vite keeps serving the SPA itself.
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const clientDist = resolve(__dirname, "../../client/dist")
+if (existsSync(clientDist)) {
+  app.use(express.static(clientDist))
+  app.get("*", (req, res, next) => {
+    if (req.path.startsWith("/api/") || req.path.startsWith("/socket.io/")) return next()
+    res.sendFile(join(clientDist, "index.html"))
+  })
+}
 
 app.use((_req, res) => res.status(404).json({ error: "Not found" }))
 

@@ -104,7 +104,7 @@ class LanguageProvider extends ChangeNotifier {
     final api = _api;
     if (api == null || api.token == null) return;
     try {
-      final res = await api.get('/api/i18n/$code');
+      final res = await api.get('/i18n/$code');
       if (res is Map) {
         AppLocalizations.setRemote(
           code,

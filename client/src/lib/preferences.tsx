@@ -31,7 +31,7 @@ function loadDict(code: string): Promise<Dict> {
     loaders[`../i18n/${code}.json`]?.()
       .then((m) => (m.default ?? {}))
       .catch(() => ({})) ?? Promise.resolve({}),
-    api(`/api/i18n/${code}`).catch(() => ({} as Dict)),
+    api(`/i18n/${code}`).catch(() => ({} as Dict)),
   ]).then(([bundled, remote]) => {
     dicts[code] = { ...bundled, ...(remote as Dict) }
     return dicts[code]
