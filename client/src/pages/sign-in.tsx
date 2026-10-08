@@ -64,9 +64,9 @@ export default function SignInPage() {const{t}=usePreferences();
   ]
 
   return (
-    <main className="h-svh overflow-hidden lg:grid lg:grid-cols-2">
+    <main className="h-svh overflow-hidden xl:grid xl:grid-cols-2">
       {/* Left — branded hero panel (ultra-dark green shade with extra-large white circle MOHCC logo) */}
-      <div className="hidden lg:flex min-h-0 flex-col items-center justify-center gap-6 bg-[#02180d] p-8 text-white lg:p-8 xl:p-12 border-r border-white/10 relative overflow-y-auto">
+      <div className="hidden xl:flex min-h-0 flex-col items-center justify-center gap-6 bg-[#02180d] p-8 text-white xl:p-12 border-r border-white/10 relative overflow-y-auto">
         <div className="flex flex-col items-center gap-6 max-w-xl w-full my-auto">
           {/* Official MOHCC Logo — extra-large white circle badge with enlarged logo */}
           <div className="flex size-[clamp(10rem,38vh,26rem)] shrink-0 items-center justify-center rounded-full bg-white p-3 sm:p-4 lg:p-5 shadow-2xl ring-8 ring-white/20 select-none transition-all">
@@ -116,13 +116,13 @@ export default function SignInPage() {const{t}=usePreferences();
       </div>
 
       {/* Right — sign-in form (fully compatible with white background) */}
-      <div className="relative flex h-full min-h-0 justify-center overflow-y-auto bg-white p-4 sm:p-6 lg:p-10">
+      <div className="relative flex h-full min-h-0 justify-center overflow-y-auto bg-white p-4 sm:p-6 xl:p-10">
         <div className="absolute right-4 top-4">
           <LanguageMenu />
         </div>
         <div className="my-auto w-full max-w-md space-y-4 [@media(max-height:700px)]:space-y-2">
           {/* Mobile top branding badge */}
-          <div className="text-center lg:hidden pb-1">
+          <div className="text-center xl:hidden pb-1">
             <p className="text-xs font-semibold tracking-wider uppercase text-primary">
               {t("Ministry of Health and Child Care · Zimbabwe")}
             </p>
