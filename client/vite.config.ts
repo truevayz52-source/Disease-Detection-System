@@ -12,6 +12,7 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    allowedHosts: [".trycloudflare.com", ".ngrok-free.dev"],
     proxy: {
       "/api": { target: "http://localhost:4001", ws: true },
       "/socket.io": { target: "http://localhost:4001", ws: true },

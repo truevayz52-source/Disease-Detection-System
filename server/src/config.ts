@@ -14,6 +14,9 @@ export const config = {
     user: process.env.MYSQL_USER ?? "root",
     password: process.env.MYSQL_PASSWORD ?? "",
     database: process.env.MYSQL_DATABASE ?? "dds_db",
+    // External managed MySQL (e.g. Aiven free tier) requires TLS; local
+    // MariaDB stays plain. MYSQL_SSL=1 enables it without pinning a CA cert.
+    ssl: process.env.MYSQL_SSL === "1" ? { rejectUnauthorized: false } : undefined,
   },
   jwtSecret: process.env.JWT_SECRET ?? (process.env.NODE_ENV === "production"
     ? (() => { throw new Error("JWT_SECRET must be set in production") })()

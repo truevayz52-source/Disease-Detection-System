@@ -1,0 +1,11 @@
+**/node_modules
+**/dist
+**/.dart_tool
+mobile/build
+mobile/build.old
+**/uploads
+**/.env
+**/.env.local
+.git
+e2e
+**/*.log
