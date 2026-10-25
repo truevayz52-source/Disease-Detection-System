@@ -71,7 +71,9 @@ function toAuthUser(row: any, sessionId: string): AuthUser {
   }
 }
 
-/** Legacy path: our JWT signature AND a live (non-revoked) sessions row. */
+/** Legacy path: our JWT signature AND a live (non-revoked) sessions row.
+ *  Sliding idle timeout — each authenticated request bumps expires_at
+ *  forward so a session lapses after SESSION_IDLE_MINUTES of inactivity. */
 async function authenticateLegacy(token: string): Promise<AuthUser | null> {
   if (!verifyToken(token)) return null
   const rows = await query<any[]>(
@@ -82,6 +84,10 @@ async function authenticateLegacy(token: string): Promise<AuthUser | null> {
   )
   const row = rows[0]
   if (!row || row.revoked || new Date(row.expires_at) < new Date() || row.status !== "active") return null
+  // Slide the expiry forward — the session only dies when it goes quiet.
+  await query("UPDATE sessions SET expires_at = ? WHERE session_id = ?", [
+    new Date(Date.now() + config.sessionIdleMinutes * 60_000), row.session_id,
+  ])
   return toAuthUser(row, row.session_id)
 }
 

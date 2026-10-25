@@ -1,5 +1,5 @@
 import useSWR from "swr"
-import { CheckCircle2, Minus, PieChart, Siren, TrendingDown, TrendingUp } from "lucide-react"
+import { Minus, TrendingDown, TrendingUp } from "lucide-react"
 import {
   CartesianGrid,
   Legend,
@@ -104,22 +104,7 @@ const BANNER_STYLE = {
   alert: { ring: "border-red-600/60 bg-red-600/5", chip: "bg-red-600 text-white", label: "ALERT" },
 } as const
 
-const OBJECTIVE_LABELS = {
-  prediction: "Predict mortality trends",
-  detection: "Detect outbreaks early",
-  patterns: "Identify cause-of-death patterns",
-} as const
 
-const OBJECTIVE_ICONS = { prediction: TrendingUp, detection: Siren, patterns: PieChart } as const
-
-const STATUS_VARIANT: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
-  active: "default",
-  flagged: "destructive",
-  identified: "default",
-  monitoring: "secondary",
-  pending: "secondary",
-  waiting: "secondary",
-}
 
 export default function PredictionsPage() {
   const { t } = usePreferences()
@@ -145,9 +130,8 @@ export default function PredictionsPage() {
           </Card>
         )}
 
-        <div className="grid gap-6 lg:grid-cols-3">
-          {/* Headline summary */}
-          <Card className="shadow-lg lg:col-span-2">
+        {/* Headline summary */}
+        <Card className="shadow-lg">
           <CardHeader>
             <CardTitle className="text-sm">{t("Projection summary")}</CardTitle>
             <CardDescription>
@@ -164,48 +148,6 @@ export default function PredictionsPage() {
           </CardContent>
         </Card>
 
-        {/* Objectives scorecard — proof of the three system objectives */}
-        <Card className="shadow-lg">
-          <CardHeader>
-            <CardTitle className="text-sm">{t("System objectives")}</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {data ? (
-              <div className="space-y-3">
-                <div className="flex items-start gap-3">
-                  <TrendingUp className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">{t(OBJECTIVE_LABELS.prediction)}</p>
-                    <p className="mt-0.5 text-xs tabular-nums text-muted-foreground">
-                      {data.metrics.projectedTotal} ({data.metrics.projectedLower}–{data.metrics.projectedUpper}) {data.metrics.projectedPeriod} · {data.metrics.projectedMethod ?? "—"}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <Siren className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">{t(OBJECTIVE_LABELS.detection)}</p>
-                    <p className="mt-0.5 text-xs tabular-nums text-muted-foreground">
-                      {data.metrics.activeAlerts} active alert{data.metrics.activeAlerts === 1 ? "" : "s"}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <PieChart className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">{t(OBJECTIVE_LABELS.patterns)}</p>
-                    <p className="mt-0.5 text-xs tabular-nums text-muted-foreground">
-                      {data.metrics.topCategory ?? "—"} · {data.metrics.topCategoryProjected} projected
-                    </p>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">{t("Loading")}</p>
-            )}
-          </CardContent>
-        </Card>
-        </div>
 
         {/* Overall mortality projection — graph, then its summary underneath */}
         <Card className="shadow-lg">

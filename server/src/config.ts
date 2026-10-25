@@ -45,6 +45,9 @@ export const config = {
   cusumLimit: Number(process.env.CUSUM_LIMIT ?? 3),
   // Below this many buckets a forecast falls back to a rate-based baseline.
   predictionsMinPoints: Number(process.env.PREDICTIONS_MIN_POINTS ?? 3),
+  // Sliding idle-session timeout — the session's expires_at is bumped forward
+  // on every authenticated request; it lapses when idle longer than this.
+  sessionIdleMinutes: Number(process.env.SESSION_IDLE_MINUTES ?? 30),
   communityApiKey: process.env.COMMUNITY_API_KEY ?? null,
   // Streaming transcription endpoint on the Python service. Derived from
   // WHISPER_URL unless overridden — http://…/transcribe -> ws://…/stream.

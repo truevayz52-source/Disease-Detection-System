@@ -383,11 +383,17 @@ function pct(n: number): string {
   return `${Math.round(Math.abs(n))}%`
 }
 
+// Short-lived cache — predictions re-run all queries plus per-category Python
+// forecasts; 60 s of staleness is fine for analytics (same TTL as dashboard).
+let predCache: { at: number; payload: unknown } | null = null
+const PRED_TTL_MS = 60_000
+
 analyticsRouter.get(
   "/predictions",
   requireAuth,
   requireRole(...ANALYST_ROLES, "executive"),
   async (_req, res) => {
+    if (predCache && Date.now() - predCache.at < PRED_TTL_MS) return res.json(predCache.payload)
     // Weekly buckets over 26 weeks + daily buckets over 30 days. Daily exists
     // so fresh manual input still produces a projection before 3 full weeks
     // of history accumulate.
@@ -496,12 +502,16 @@ analyticsRouter.get(
       )
     }
 
-    // Per-category projections + summaries.
+    // Per-category projections + summaries. All forecastCounts calls run
+    // concurrently — they were previously sequential N× Python round-trips.
+    const catEntries = [...byCat.entries()].sort()
+    const catPredsList = await Promise.all(catEntries.map(([, counts]) => forecastCounts(counts, periods, seasonalPeriod)))
     const byCategory = [] as any[]
-    for (const [category, counts] of [...byCat.entries()].sort()) {
+    for (let ci = 0; ci < catEntries.length; ci++) {
+      const [category, counts] = catEntries[ci]
       const mean = counts.reduce((a, b) => a + b, 0) / Math.max(1, counts.length)
       const { slope } = counts.length >= config.predictionsMinPoints ? linearRegressionSeries(counts) : { slope: 0 }
-      const preds = await forecastCounts(counts, periods, seasonalPeriod)
+      const preds = catPredsList[ci]
       const trend = counts.length < config.predictionsMinPoints ? "insufficient_data" : trendWord(slope, mean)
       const catHorizon = preds ? Math.round(preds.preds.reduce((a, p) => a + p, 0)) : 0
       const catLower = preds ? Math.round(preds.lower.reduce((a, p) => a + p, 0)) : 0
@@ -622,7 +632,7 @@ analyticsRouter.get(
       },
     ]
 
-    res.json({
+    const payload = {
       granularity: daily ? "daily" : "weekly",
       periodWord,
       overall: { series, forecast, directionPct: Math.round(directionPct), forecastMethod: overallPreds?.method ?? null, summary: overallSummary },
@@ -642,7 +652,9 @@ analyticsRouter.get(
         topCategoryProjected: byCategory[0]?.horizonTotal ?? 0,
       },
       objectives,
-    })
+    }
+    predCache = { at: Date.now(), payload }
+    res.json(payload)
   },
 )
 

@@ -2,9 +2,11 @@ import { Outlet } from "react-router-dom"
 import { AppSidebar } from "@/components/app-sidebar"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { useAuth } from "@/lib/auth"
+import { useIdleTimeout } from "@/lib/idle"
 
 export function AppLayout() {
   const { user } = useAuth()
+  useIdleTimeout()
   if (!user) return null
 
   return (
