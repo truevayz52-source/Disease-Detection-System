@@ -53,7 +53,7 @@ alertsRouter.get("/active-count", requireAuth, async (_req, res) => {
   res.json({ count: Number(rows[0]?.count ?? 0) })
 })
 
-alertsRouter.patch("/:id/resolve", requireAuth, requireRole("public_health_analyst", "system_admin"), async (req, res) => {
+alertsRouter.patch("/:id/resolve", requireAuth, requireRole("public_health_analyst"), async (req, res) => {
   const result = await query<any>(
     "UPDATE outbreak_alerts SET status = 'resolved', resolved_at = NOW() WHERE alert_id = ? AND status = 'active'",
     [req.params.id],

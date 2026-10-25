@@ -21,7 +21,7 @@ const upload = multer({
   limits: { fileSize: 25 * 1024 * 1024 },
 })
 
-const roles = ["medical_officer", "mortuary_clerk", "public_health_analyst", "system_admin"] as const
+const roles = ["medical_officer", "mortuary_clerk", "public_health_analyst", "pathologist"] as const
 
 evidenceRouter.post("/", requireAuth, requireRole(...roles), upload.single("file"), async (req, res) => {
   const parsed = z.object({

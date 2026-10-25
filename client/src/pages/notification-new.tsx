@@ -23,9 +23,8 @@ interface FormState {
   age: string
   gender: string
   residentialAddress: string
-  latitude: string
-  longitude: string
   facilityId: string
+  linkedSignalId: string
   dateOfDeath: string
   icdCode: string
   clinicalSummary: string
@@ -38,9 +37,8 @@ const EMPTY: FormState = {
   age: "",
   gender: "",
   residentialAddress: "",
-  latitude: "",
-  longitude: "",
   facilityId: "",
+  linkedSignalId: "",
   dateOfDeath: "",
   icdCode: "",
   clinicalSummary: "",
@@ -141,6 +139,9 @@ export default function NotificationNewPage() {const{t}=usePreferences();
 
   async function submit() {
     setSubmitting(true)
+    // Coordinates come from the selected facility's stored GPS fix — officers
+    // never type lat/lng (Ch 4.2: location = reporting facility).
+    const facility = facilities?.items.find((f) => f.facility_id === form.facilityId)
     const payload = {
       submissionId: crypto.randomUUID(),
       patient: {
@@ -149,8 +150,8 @@ export default function NotificationNewPage() {const{t}=usePreferences();
         age: form.age ? Number(form.age) : null,
         gender: form.gender,
         residentialAddress: form.residentialAddress || null,
-        latitude: form.latitude ? Number(form.latitude) : null,
-        longitude: form.longitude ? Number(form.longitude) : null,
+        latitude: facility?.latitude ?? null,
+        longitude: facility?.longitude ?? null,
       },
       facilityId: form.facilityId,
       dateOfDeath: form.dateOfDeath,
@@ -164,6 +165,17 @@ export default function NotificationNewPage() {const{t}=usePreferences();
         { method: "POST", body: JSON.stringify(payload) },
       )
       clearDraft()
+      // Best-effort back-link: this notification was created from a signal.
+      if (form.linkedSignalId) {
+        try {
+          await api(`/signals/${form.linkedSignalId}/workflow`, {
+            method: "PATCH",
+            body: JSON.stringify({ linkedNotificationId: res.notificationId }),
+          })
+        } catch {
+          /* link failure must not lose the notification */
+        }
+      }
       if (res.mpdsrAlertId) toast.warning(t("MPDSR alert generated for this maternal/perinatal death."))
       else if (res.alertsCreated.length) toast.warning(`${res.alertsCreated.length} outbreak alert(s) triggered.`)
       else toast.success(t("Death notification recorded."))
@@ -243,14 +255,6 @@ export default function NotificationNewPage() {const{t}=usePreferences();
               <div className="space-y-2 sm:col-span-2">
                 <Label htmlFor="address">{t("Residential address")}</Label>
                 <Input id="address" value={form.residentialAddress} onChange={(e) => set("residentialAddress", e.target.value)} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="lat">{t("Latitude (optional)")}</Label>
-                <Input id="lat" type="number" step="any" value={form.latitude} onChange={(e) => set("latitude", e.target.value)} placeholder="-17.82" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="lng">{t("Longitude (optional)")}</Label>
-                <Input id="lng" type="number" step="any" value={form.longitude} onChange={(e) => set("longitude", e.target.value)} placeholder="31.05" />
               </div>
             </CardContent>
           </Card>

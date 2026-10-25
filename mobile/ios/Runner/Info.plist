@@ -75,5 +75,17 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<!-- Background sync: iOS delivery of the periodic task is opportunistic;
+	     the Android workmanager job and foreground triggers are the
+	     reliable paths. -->
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>dds-offline-sync</string>
+	</array>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+		<string>processing</string>
+	</array>
 </dict>
 </plist>

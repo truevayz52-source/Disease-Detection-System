@@ -47,7 +47,7 @@ export default function AutopsyDetailPage() {const{t}=usePreferences();
   const [finalizing, setFinalizing] = useState(false)
   const a = data?.autopsy
   const piiFields = a ? [a.patient_name, a.national_id, a.facility_name, a.pathologist_name] : []
-  const canFinalize = a?.status !== "finalized" && user && ["pathologist", "system_admin"].includes(user.role)
+  const canFinalize = a?.status !== "finalized" && user && ["pathologist"].includes(user.role)
 
   async function finalize() {
     setFinalizing(true)

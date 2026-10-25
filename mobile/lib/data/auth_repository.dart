@@ -9,7 +9,9 @@ import 'biometric_auth.dart';
 import 'image_cache.dart';
 import 'models.dart';
 import 'offline_accounts.dart';
+import 'read_cache.dart';
 import 'secure_store.dart';
+import 'sync_worker.dart';
 import '../l10n/app_localizations.dart';
 
 /// Mirrors client/src/lib/auth.tsx — owns the JWT (persisted like the web
@@ -297,23 +299,15 @@ class AuthRepository extends ChangeNotifier {
     if (email != null) {
       if (wipeOffline) {
         await _accounts.remove(email);
-        await _purgeReadCache(await SharedPreferences.getInstance());
+        await ReadCache().clear();
+        (await SharedPreferences.getInstance()).remove('dds_last_live_get');
         await ImageCacheStore().clear();
+        unawaited(SyncWorker.cancel());
       } else {
         await _accounts.clearToken(email);
       }
     }
     notifyListeners();
-  }
-
-  Future<void> _purgeReadCache(SharedPreferences prefs) async {
-    for (final key in prefs.getKeys()) {
-      if (key.startsWith('cache:') ||
-          key.startsWith('cache_ts:') ||
-          key == 'dds_last_live_get') {
-        await prefs.remove(key);
-      }
-    }
   }
 
   /// Server-side session expiry hook — wired to ApiClient.onUnauthorized.

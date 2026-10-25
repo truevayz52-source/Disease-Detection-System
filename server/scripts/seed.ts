@@ -8,6 +8,7 @@ import { randomUUID } from "node:crypto"
 import { getPool, query } from "../src/db.js"
 import { hashPassword } from "../src/auth/password.js"
 import { detectOutbreaks } from "../src/lib/outbreak.js"
+import { analyzeText } from "../src/lib/classifier.js"
 
 const FACILITIES = [
   { name: "Harare Central Hospital", province: "Harare", district: "Harare", lat: -17.8292, lng: 31.0522, type: "central_hospital" },
@@ -84,7 +85,7 @@ async function main() {
     await query(
       `INSERT INTO icd_codes (icd_code, icd_version, description, disease_category, is_notifiable)
        VALUES (?, 'ICD-10', ?, ?, ?)
-       ON DUPLICATE KEY UPDATE description = VALUES(description), disease_category = VALUES(disease_category), is_notifiable = VALUES(is_notifiable)`,
+       ON CONFLICT (icd_code) DO UPDATE SET description = EXCLUDED.description, disease_category = EXCLUDED.disease_category, is_notifiable = EXCLUDED.is_notifiable`,
       [c.code, c.desc, c.category, c.notifiable],
     )
   }
@@ -98,7 +99,7 @@ async function main() {
     await query(
       `INSERT INTO users (user_id, full_name, email, password_hash, role, facility_id, phone, department, language, timezone)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-       ON DUPLICATE KEY UPDATE password_hash = VALUES(password_hash), role = VALUES(role), phone = VALUES(phone), department = VALUES(department)`,
+       ON CONFLICT (email) DO UPDATE SET password_hash = EXCLUDED.password_hash, role = EXCLUDED.role, phone = EXCLUDED.phone, department = EXCLUDED.department`,
       [id, u.name, u.email, hash, u.role, u.facility !== null ? facilityIds[u.facility] : null, u.phone, u.department, 'en', 'Africa/Harare'],
     )
     console.log(`[seed]   ${u.email} (${u.role})`)
@@ -167,6 +168,102 @@ async function main() {
     await addCase("A00", i % 2 === 0 ? 0 : 1, d)
   }
   console.log(`[seed]   inserted ${inserted} notifications`)
+
+  console.log("[seed] response playbooks...")
+  const PLAYBOOKS = [
+    {
+      name: "Suspicious death scene response",
+      type: "suspicious_death",
+      desc: "Secure the scene, notify police and the forensic pathologist, preserve evidence before body removal.",
+      steps: [
+        "Secure the scene and restrict access",
+        "Notify the nearest police post",
+        "Dispatch forensic team for scene examination",
+        "Document the scene (photos, body position, witnesses)",
+        "Arrange body removal to the mortuary",
+        "Open a case investigation and link it to the signal",
+      ],
+    },
+    {
+      name: "MPDSR community verification",
+      type: "maternal_perinatal",
+      desc: "Verify a suspected maternal or perinatal death within 48 hours and open an MPDSR review.",
+      steps: [
+        "Contact the reporting source to confirm the death",
+        "Verify pregnancy / perinatal status",
+        "Create a death notification flagged maternal/perinatal",
+        "Notify the district MPDSR committee",
+        "Schedule a verbal autopsy / family interview",
+      ],
+    },
+    {
+      name: "Unreported death follow-up",
+      type: "unreported_death",
+      desc: "Trace community deaths that were never formally notified and complete registration.",
+      steps: [
+        "Visit the household or contact the informant",
+        "Collect the deceased's identity details",
+        "Create a death notification at the nearest facility",
+        "Record cause of death via verbal autopsy if needed",
+        "Close the signal once the notification is filed",
+      ],
+    },
+  ]
+  for (const pb of PLAYBOOKS) {
+    await query(
+      "INSERT INTO response_playbooks (playbook_id, name, description, signal_type, steps, created_by) VALUES (?, ?, ?, ?, ?, ?)",
+      [randomUUID(), pb.name, pb.desc, pb.type, JSON.stringify(pb.steps), reporterId],
+    )
+  }
+
+  console.log("[seed] demo mortality signals...")
+  const SIGNALS = [
+    {
+      type: "unreported_death",
+      title: "Elderly man died at home — never reported",
+      channel: "vhw",
+      district: "Harare",
+      province: "Harare",
+      severity: "medium",
+      desc: "Village health worker reports an elderly man died at home last week; the death was never formally notified to a facility.",
+    },
+    {
+      type: "suspicious_death",
+      title: "Unattended body found near riverbank",
+      channel: "police",
+      district: "Chinhoyi",
+      province: "Mashonaland West",
+      severity: "critical",
+      desc: "Police post reports an unidentified body found near the river; suspected foul play, scene secured.",
+    },
+    {
+      type: "maternal_perinatal",
+      title: "Woman died during home delivery",
+      channel: "community",
+      district: "Mutare",
+      province: "Manicaland",
+      severity: "high",
+      desc: "Community member reports a woman died in labour at home; the delivery was unattended and the death unreported.",
+    },
+  ]
+  const slaFor = (type: string, severity: string) =>
+    severity === "critical" || type === "suspicious_death" ? 24 : type === "maternal_perinatal" ? 48 : 72
+  for (const s of SIGNALS) {
+    const id = randomUUID()
+    const analysis = analyzeText(`${s.title} ${s.desc}`)
+    await query(
+      `INSERT INTO health_signals
+       (signal_id, signal_type, title, description, source_channel, district, province, severity, reported_by, sla_due_at, risk_score, classified_topics, sentiment, classified_drivers)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW() + (? * INTERVAL '1 hour'), ?, ?, ?, ?)`,
+      [id, s.type, s.title, s.desc, s.channel, s.district, s.province, s.severity, reporterId, slaFor(s.type, s.severity),
+       analysis.riskScore, analysis.topics.join(","), analysis.sentiment, analysis.drivers.join(",")],
+    )
+    await query(
+      `INSERT INTO signal_workflow_events (event_id, signal_id, to_stage, to_status, actor_id, actor_name, notes)
+       VALUES (?, ?, 'captured', 'new', ?, 'Seed', 'Signal captured')`,
+      [randomUUID(), id, reporterId],
+    )
+  }
 
   console.log("[seed] running outbreak detection...")
   const alerts = await detectOutbreaks()

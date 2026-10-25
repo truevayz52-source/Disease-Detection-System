@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react"
 import useSWR from "swr"
 import { toast } from "sonner"
-import { Building2, MapPin, RefreshCw, Search, ShieldCheck } from "lucide-react"
+import { Building2, Loader2, LocateFixed, MapPin, Pencil, RefreshCw, Search, ShieldCheck } from "lucide-react"
 import { SiteHeader } from "@/components/site-header"
 import { StatCard } from "@/components/stat-card"
 import { Badge } from "@/components/ui/badge"
@@ -24,32 +24,94 @@ import { usePreferences } from "@/lib/preferences"
 
 export default function AdminFacilitiesPage() {const{t}=usePreferences();
   const { data, mutate } = useSWR<{ items: Facility[] }>("/facilities", (u: string) => api(u))
-  const { data: geo } = useSWR<{ provinces: { province_id: string; province_name: string }[]; districts: { district_id: string; province: string; district: string }[] }>("/facilities/geo", (u: string) => api(u))
+  const { data: geo } = useSWR<{ provinces: { province_id: string; province_name: string }[]; districts: { district_id: string; province: string; district: string; lat: number; lng: number }[] }>("/facilities/geo", (u: string) => api(u))
   const [open, setOpen] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [search, setSearch] = useState("")
   const [provinceFilter, setProvinceFilter] = useState("all")
-  const [form, setForm] = useState({ facilityName: "", province: "", district: "", latitude: "", longitude: "" })
-  const [saving, setSaving] = useState(false)
+  const [typeFilter, setTypeFilter] = useState("all")
+  const [form, setForm] = useState({ facilityName: "", province: "", district: "", latitude: "", longitude: "", facilityType: "district_hospital" })
 
-  async function createFacility() {
-    setSaving(true)
-    try {
-      await api("/facilities", {
-        method: "POST",
-        body: JSON.stringify({
-          facilityName: form.facilityName,
-          province: form.province,
-          district: form.district,
-          latitude: Number(form.latitude),
-          longitude: Number(form.longitude),
-        }),
+  const FACILITY_TYPES = [
+    "central_hospital","provincial_hospital","district_hospital","mission_hospital","general_hospital",
+    "private_hospital","rural_health_clinic","specialist_clinic","clinic","laboratory",
+    "head_office","provincial_office","district_office","administrative_office",
+  ]
+
+  function startEdit(f: Facility) {
+    setEditingId(f.facility_id)
+    setForm({
+      facilityName: f.facility_name,
+      province: f.province,
+      district: f.district,
+      latitude: String(f.latitude),
+      longitude: String(f.longitude),
+      facilityType: f.facility_type,
+    })
+    setOpen(true)
+  }
+  const [saving, setSaving] = useState(false)
+  const [detecting, setDetecting] = useState(false)
+  const [gpsFix, setGpsFix] = useState(false)
+
+  function districtCentroid(district: string) {
+    const d = geo?.districts.find((x) => x.district === district)
+    return d && d.lat != null ? { lat: d.lat, lng: d.lng } : null
+  }
+
+  // Coordinates are auto-detected: device GPS first, district centre fallback.
+  function detectLocation(showErrors = false) {
+    const fallback = () =>
+      setForm((f) => {
+        const c = districtCentroid(f.district)
+        return c ? { ...f, latitude: String(c.lat), longitude: String(c.lng) } : f
       })
-      toast.success(t("Facility registered."))
+    if (!("geolocation" in navigator)) {
+      if (showErrors) toast.error(t("Geolocation is unavailable"))
+      fallback()
+      return
+    }
+    setDetecting(true)
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setGpsFix(true)
+        setForm((f) => ({ ...f, latitude: pos.coords.latitude.toFixed(6), longitude: pos.coords.longitude.toFixed(6) }))
+        setDetecting(false)
+      },
+      () => {
+        setDetecting(false)
+        if (showErrors) toast.error(t("Geolocation is unavailable"))
+        fallback()
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 },
+    )
+  }
+
+  async function saveFacility() {
+    setSaving(true)
+    const payload = {
+      facilityName: form.facilityName,
+      province: form.province,
+      district: form.district,
+      latitude: form.latitude === "" ? undefined : Number(form.latitude),
+      longitude: form.longitude === "" ? undefined : Number(form.longitude),
+      facilityType: form.facilityType,
+    }
+    try {
+      if (editingId) {
+        await api(`/facilities/${editingId}`, { method: "PATCH", body: JSON.stringify(payload) })
+        toast.success(t("Facility updated."))
+      } else {
+        await api("/facilities", { method: "POST", body: JSON.stringify(payload) })
+        toast.success(t("Facility registered."))
+      }
       setOpen(false)
-      setForm({ facilityName: "", province: "", district: "", latitude: "", longitude: "" })
+      setEditingId(null)
+      setForm({ facilityName: "", province: "", district: "", latitude: "", longitude: "", facilityType: "district_hospital" })
+      setGpsFix(false)
       mutate()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Create failed")
+      toast.error(err instanceof Error ? err.message : "Save failed")
     } finally {
       setSaving(false)
     }
@@ -58,18 +120,21 @@ export default function AdminFacilitiesPage() {const{t}=usePreferences();
   const valid =
     form.facilityName.trim().length >= 2 &&
     form.province.trim().length >= 2 &&
-    form.district.trim().length >= 2 &&
-    !Number.isNaN(Number(form.latitude)) &&
-    !Number.isNaN(Number(form.longitude))
+    form.district.trim().length >= 2
 
   const items = useMemo(() => {
     const q = search.trim().toLowerCase()
     return (data?.items ?? []).filter((f) => {
       if (provinceFilter !== "all" && f.province !== provinceFilter) return false
+      if (typeFilter !== "all" && f.facility_type !== typeFilter) return false
       if (!q) return true
-      return [f.facility_name, f.district, f.province, f.facility_type].some((v) => v?.toLowerCase().includes(q))
+      return [f.facility_name, f.facility_code, f.district, f.province, f.facility_type].some((v) => v?.toLowerCase().includes(q))
     })
-  }, [data, search, provinceFilter])
+  }, [data, search, provinceFilter, typeFilter])
+
+  // Render cap — 4k+ table rows would freeze the page; the search narrows it.
+  const RENDER_LIMIT = 200
+  const visible = items.slice(0, RENDER_LIMIT)
 
   const stats = useMemo(() => {
     const all = data?.items ?? []
@@ -103,9 +168,29 @@ export default function AdminFacilitiesPage() {const{t}=usePreferences();
               {(geo?.provinces ?? []).map((p) => <SelectItem key={p.province_id} value={p.province_name}>{p.province_name}</SelectItem>)}
             </SelectContent>
           </Select>
+          <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v ?? "all")}>
+            <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t("All types")}</SelectItem>
+              {FACILITY_TYPES.map((ft) => <SelectItem key={ft} value={ft}>{ft.replace(/_/g, " ")}</SelectItem>)}
+            </SelectContent>
+          </Select>
           <Button variant="outline" size="sm" onClick={() => mutate()}><RefreshCw className="size-3.5" /> {t("Refresh")}</Button>
-          <p className="ml-auto text-sm text-muted-foreground">{items.length} of {data?.items.length ?? 0} facilities</p>
-          <Button size="sm" onClick={() => setOpen(true)}>
+          <p className="ml-auto text-sm text-muted-foreground">
+            {items.length > RENDER_LIMIT
+              ? t("Showing {n} of {total} — search to narrow", { n: RENDER_LIMIT, total: items.length })
+              : t("{n} of {total} facilities", { n: items.length, total: data?.items.length ?? 0 })}
+          </p>
+          <Button
+            size="sm"
+            onClick={() => {
+              setEditingId(null)
+              setForm({ facilityName: "", province: "", district: "", latitude: "", longitude: "", facilityType: "district_hospital" })
+              setGpsFix(false)
+              setOpen(true)
+              detectLocation()
+            }}
+          >
             <Building2 className="size-4" /> Add facility
           </Button>
         </div>
@@ -119,10 +204,11 @@ export default function AdminFacilitiesPage() {const{t}=usePreferences();
                   <TableHead>{t("District")}</TableHead>
                   <TableHead>{t("Province")}</TableHead>
                   <TableHead>{t("Coordinates")}</TableHead>
+                  <TableHead className="w-10" />
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {items.map((f) => (
+                {visible.map((f) => (
                   <TableRow key={f.facility_id}>
                     <TableCell className="font-medium">{f.facility_name}</TableCell>
                     <TableCell>
@@ -133,10 +219,15 @@ export default function AdminFacilitiesPage() {const{t}=usePreferences();
                     <TableCell className="font-mono text-xs text-muted-foreground">
                       {Number(f.latitude).toFixed(4)}, {Number(f.longitude).toFixed(4)}
                     </TableCell>
+                    <TableCell>
+                      <Button variant="ghost" size="icon" title={t("Edit facility")} onClick={() => startEdit(f)}>
+                        <Pencil className="size-4" />
+                      </Button>
+                    </TableCell>
                   </TableRow>
                 ))}
                 {!items.length && (
-                  <TableRow><TableCell colSpan={5} className="py-8 text-center text-muted-foreground">{t("No facilities match your filters.")}</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={6} className="py-8 text-center text-muted-foreground">{t("No facilities match your filters.")}</TableCell></TableRow>
                 )}
               </TableBody>
             </Table>
@@ -147,12 +238,21 @@ export default function AdminFacilitiesPage() {const{t}=usePreferences();
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{t("Register facility")}</DialogTitle>
+            <DialogTitle>{editingId ? t("Edit facility") : t("Register facility")}</DialogTitle>
           </DialogHeader>
           <div className="grid gap-4 py-2">
             <div className="space-y-2">
               <Label>{t("Facility name")}</Label>
               <Input value={form.facilityName} onChange={(e) => setForm({ ...form, facilityName: e.target.value })} />
+            </div>
+            <div className="space-y-2">
+              <Label>{t("Facility type")}</Label>
+              <Select value={form.facilityType} onValueChange={(v) => setForm({ ...form, facilityType: v ?? "district_hospital" })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {FACILITY_TYPES.map((ft) => <SelectItem key={ft} value={ft}>{ft.replace(/_/g, " ")}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -166,7 +266,26 @@ export default function AdminFacilitiesPage() {const{t}=usePreferences();
               </div>
               <div className="space-y-2">
                 <Label>{t("District")}</Label>
-                <Select value={form.district} onValueChange={(v) => setForm({ ...form, district: v ?? "" })} disabled={!form.province}>
+                <Select
+                  value={form.district}
+                  onValueChange={(v) => {
+                    const d = v ?? ""
+                    setForm((f) => {
+                      const upd = { ...f, district: d }
+                      // No device fix yet — pre-fill the district centre so
+                      // coordinates are never typed by hand.
+                      if (!gpsFix) {
+                        const c = districtCentroid(d)
+                        if (c) {
+                          upd.latitude = String(c.lat)
+                          upd.longitude = String(c.lng)
+                        }
+                      }
+                      return upd
+                    })
+                  }}
+                  disabled={!form.province}
+                >
                   <SelectTrigger><SelectValue placeholder={t("Select district")} /></SelectTrigger>
                   <SelectContent>
                     {(geo?.districts ?? []).filter((d) => d.province === form.province).map((d) => <SelectItem key={d.district_id} value={d.district}>{d.district}</SelectItem>)}
@@ -174,20 +293,28 @@ export default function AdminFacilitiesPage() {const{t}=usePreferences();
                 </Select>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>{t("Latitude")}</Label>
-                <Input type="number" step="any" value={form.latitude} onChange={(e) => setForm({ ...form, latitude: e.target.value })} placeholder="-17.82" />
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>{t("Coordinates")}</Label>
+                <Button type="button" variant="outline" size="sm" disabled={detecting} onClick={() => detectLocation(true)}>
+                  {detecting ? <Loader2 className="size-3.5 animate-spin" /> : <LocateFixed className="size-3.5" />}
+                  {t("Detect location")}
+                </Button>
               </div>
-              <div className="space-y-2">
-                <Label>{t("Longitude")}</Label>
-                <Input type="number" step="any" value={form.longitude} onChange={(e) => setForm({ ...form, longitude: e.target.value })} placeholder="31.05" />
+              <div className="grid grid-cols-2 gap-4">
+                <Input type="number" step="any" value={form.latitude} onChange={(e) => { setGpsFix(false); setForm({ ...form, latitude: e.target.value }) }} placeholder="-17.82" aria-label={t("Latitude")} />
+                <Input type="number" step="any" value={form.longitude} onChange={(e) => { setGpsFix(false); setForm({ ...form, longitude: e.target.value }) }} placeholder="31.05" aria-label={t("Longitude")} />
               </div>
+              <p className="text-xs text-muted-foreground">
+                {gpsFix
+                  ? t("Detected from this device's GPS.")
+                  : t("Auto-filled from the district centre — press Detect location while at the facility for an exact GPS fix.")}
+              </p>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)}>{t("Cancel")}</Button>
-            <Button disabled={saving || !valid} onClick={createFacility}>{t("Register")}</Button>
+            <Button variant="outline" onClick={() => { setOpen(false); setEditingId(null) }}>{t("Cancel")}</Button>
+            <Button disabled={saving || !valid} onClick={saveFacility}>{editingId ? t("Save changes") : t("Register")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -30,9 +30,9 @@ void main() {
     expect(items.length, 3);
     expect(items[0].id, a.id);
     expect(items[1].id, b.id);
-    expect(items[0].data['patient']['fullName'], 'A');
-    expect(items[1].data['patient']['fullName'], 'B');
-    expect(items[2].type, 'image');
+    expect(items[0].body['patient']['fullName'], 'A');
+    expect(items[1].body['patient']['fullName'], 'B');
+    expect(items[2].kind, 'multipart');
     expect(await queue.count(), 3);
 
     await queue.remove(a.id);

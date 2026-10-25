@@ -1,6 +1,6 @@
 import crypto from "node:crypto"
 import type { Request } from "express"
-import { newId, query, getPool } from "../db.js"
+import { newId, query, getPool, acquireAdvisoryLock, releaseAdvisoryLock } from "../db.js"
 
 /**
  * Immutable, tamper-evident audit trail (Chapter 4.7). Every entry's
@@ -19,8 +19,7 @@ export async function writeAudit(
 ) {
   const connection = await getPool().getConnection()
   try {
-  const [lock] = await connection.query<any[]>("SELECT GET_LOCK('dds_audit_append', 10) AS acquired")
-  if (!lock[0]?.acquired) throw new Error("Audit writer busy")
+  if (!await acquireAdvisoryLock(connection, "dds_audit_append", 10)) throw new Error("Audit writer busy")
   const query = async <T = any>(sql: string, params: any[] = []): Promise<T> => {
     const [rows] = await connection.query(sql, params); return rows as T
   }
@@ -60,7 +59,7 @@ export async function writeAudit(
   await query("UPDATE audit_log SET session_id = ?, device_fingerprint = ? WHERE audit_id = ?", [req?.user?.sessionId ?? null, crypto.createHash("sha256").update(req?.headers["user-agent"] ?? "unknown").digest("hex"), auditId])
   return auditId
   } finally {
-    await connection.query("SELECT RELEASE_LOCK('dds_audit_append')")
+    await releaseAdvisoryLock(connection, "dds_audit_append")
     connection.release()
   }
 }

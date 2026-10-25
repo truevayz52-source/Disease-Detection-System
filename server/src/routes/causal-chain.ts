@@ -7,7 +7,7 @@ import { writeAudit } from "../lib/audit.js"
 export const causalChainRouter = Router()
 
 // Create or update causal chain COD
-causalChainRouter.post("/", requireAuth, requireRole("medical_officer", "pathologist", "public_health_analyst", "system_admin"), async (req, res) => {
+causalChainRouter.post("/", requireAuth, requireRole("medical_officer", "pathologist", "public_health_analyst"), async (req, res) => {
   const schema = z.object({
     notificationId: z.string(),
     underlyingCause: z.string(),
@@ -45,7 +45,7 @@ causalChainRouter.post("/", requireAuth, requireRole("medical_officer", "patholo
 })
 
 // Get causal chain for a notification
-causalChainRouter.get("/:notificationId", requireAuth, requireRole("medical_officer", "pathologist", "public_health_analyst", "system_admin"), async (req, res) => {
+causalChainRouter.get("/:notificationId", requireAuth, requireRole("medical_officer", "pathologist", "public_health_analyst"), async (req, res) => {
   const chain = await query<any[]>(
     "SELECT * FROM causal_chain_cod WHERE notification_id = ?",
     [req.params.notificationId]

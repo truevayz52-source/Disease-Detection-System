@@ -152,6 +152,13 @@ class DeathNotification {
   final bool isMaternalPerinatal;
   final String reportedByName;
   final String createdAt;
+  final String? rejectionReason;
+  final String? rejectedBy;
+  final String? rejectedAt;
+  final String? assignedTo;
+  final String? assigneeName;
+  final String? reviewDueAt;
+  final bool overdue;
 
   const DeathNotification({
     required this.notificationId,
@@ -176,6 +183,13 @@ class DeathNotification {
     required this.isMaternalPerinatal,
     required this.reportedByName,
     required this.createdAt,
+    this.rejectionReason,
+    this.rejectedBy,
+    this.rejectedAt,
+    this.assignedTo,
+    this.assigneeName,
+    this.reviewDueAt,
+    this.overdue = false,
   });
 
   factory DeathNotification.fromJson(Map<String, dynamic> j) =>
@@ -204,6 +218,13 @@ class DeathNotification {
             j['is_maternal_perinatal'] == true,
         reportedByName: j['reported_by_name'] as String? ?? '',
         createdAt: j['created_at'] as String? ?? '',
+        rejectionReason: j['rejection_reason'] as String?,
+        rejectedBy: j['rejected_by'] as String?,
+        rejectedAt: j['rejected_at'] as String?,
+        assignedTo: j['assigned_to'] as String?,
+        assigneeName: j['assignee_name'] as String?,
+        reviewDueAt: j['review_due_at'] as String?,
+        overdue: j['overdue'] == 1 || j['overdue'] == true,
       );
 }
 
@@ -248,6 +269,7 @@ class AutopsyReport {
   final String? finalIcdCode;
   final String? finalCauseOfDeath;
   final String? digitalSignature;
+  final String? signatureHmac;
   final String? finalizedAt;
   final String? createdAt;
   final String? pathologistName;
@@ -265,6 +287,7 @@ class AutopsyReport {
     this.finalIcdCode,
     this.finalCauseOfDeath,
     this.digitalSignature,
+    this.signatureHmac,
     this.finalizedAt,
     this.createdAt,
     this.pathologistName,
@@ -284,6 +307,7 @@ class AutopsyReport {
     finalIcdCode: j['final_icd_code'] as String?,
     finalCauseOfDeath: j['final_cause_of_death'] as String?,
     digitalSignature: j['digital_signature'] as String?,
+    signatureHmac: j['signature_hmac'] as String?,
     finalizedAt: j['finalized_at'] as String?,
     createdAt: j['created_at'] as String?,
     pathologistName: j['pathologist_name'] as String?,
@@ -291,6 +315,49 @@ class AutopsyReport {
     facilityName: j['facility_name'] as String?,
     district: j['district'] as String?,
   );
+}
+
+class MedicalCertification {
+  final String certificationId;
+  final String notificationId;
+  final String certifiedBy;
+  final String certifiedByName;
+  final String finalIcdCode;
+  final String finalCauseOfDeath;
+  final String mannerOfDeath;
+  final String signerName;
+  final String signatureHmac;
+  final String auditHash;
+  final String createdAt;
+
+  const MedicalCertification({
+    required this.certificationId,
+    required this.notificationId,
+    required this.certifiedBy,
+    required this.certifiedByName,
+    required this.finalIcdCode,
+    required this.finalCauseOfDeath,
+    required this.mannerOfDeath,
+    required this.signerName,
+    required this.signatureHmac,
+    required this.auditHash,
+    required this.createdAt,
+  });
+
+  factory MedicalCertification.fromJson(Map<String, dynamic> j) =>
+      MedicalCertification(
+        certificationId: j['certification_id'] as String,
+        notificationId: j['notification_id'] as String? ?? '',
+        certifiedBy: j['certified_by'] as String? ?? '',
+        certifiedByName: j['certified_by_name'] as String? ?? '',
+        finalIcdCode: j['final_icd_code'] as String? ?? '',
+        finalCauseOfDeath: j['final_cause_of_death'] as String? ?? '',
+        mannerOfDeath: j['manner_of_death'] as String? ?? 'natural',
+        signerName: j['signer_name'] as String? ?? '',
+        signatureHmac: j['signature_hmac'] as String? ?? '',
+        auditHash: j['audit_hash'] as String? ?? '',
+        createdAt: j['created_at'] as String? ?? '',
+      );
 }
 
 class OutbreakAlert {

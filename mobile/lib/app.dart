@@ -9,6 +9,9 @@ import 'data/api_client.dart';
 import 'data/auth_repository.dart';
 import 'data/dds_repository.dart';
 import 'data/draft_store.dart';
+import 'data/entity_shadow.dart';
+import 'data/mutation_service.dart';
+import 'data/sync_engine.dart';
 import 'data/sync_service.dart';
 import 'data/translation_service.dart';
 import 'l10n/app_localizations.dart';
@@ -30,6 +33,8 @@ class _DdsAppState extends State<DdsApp> {
   late final ApiClient _api;
   late final AuthRepository _auth;
   late final SyncService _sync;
+  late final MutationService _mutations;
+  late final EntityShadowStore _shadow;
   late final LanguageProvider _lang;
   late final GoRouter _router;
 
@@ -40,7 +45,11 @@ class _DdsAppState extends State<DdsApp> {
     unawaited(_api.init());
     _auth = AuthRepository(_api);
     _api.onUnauthorized = _auth.handleUnauthorized;
-    _sync = SyncService(_api, DdsRepository(_api), OfflineQueue());
+    final repo = DdsRepository(_api);
+    final queue = OfflineQueue();
+    _shadow = EntityShadowStore();
+    _sync = SyncService(_api, SyncEngine(_api, repo, queue, _shadow), queue);
+    _mutations = MutationService(_api, queue, _shadow);
     _api.onReachability = _sync.setReachable;
     _lang = LanguageProvider();
     _lang.bindApi(_api);
@@ -61,6 +70,8 @@ class _DdsAppState extends State<DdsApp> {
         ChangeNotifierProvider<AuthRepository>.value(value: _auth),
         Provider<DdsRepository>(create: (_) => DdsRepository(_api)),
         ChangeNotifierProvider<SyncService>.value(value: _sync),
+        ChangeNotifierProvider<MutationService>.value(value: _mutations),
+        Provider<EntityShadowStore>.value(value: _shadow),
         ChangeNotifierProvider<LanguageProvider>.value(value: _lang),
         Provider<TranslationService>(create: (_) => TranslationService(_api)),
       ],
@@ -75,8 +86,8 @@ class _DdsAppState extends State<DdsApp> {
             supportedLocales: kLanguageLocales,
             // Fallback delegates come FIRST: they serve English chrome for
             // every locale. The Global* delegates override them wherever a
-            // real translation exists — without the fallbacks, switching to a
-            // code Flutter doesn't ship (nd/kck/sbn/huc/nmq/ndc/toi/ts/ve/zsl)
+            // real translation exists — without the fallbacks, switching to
+            // a code Flutter doesn't ship (nd)
             // leaves MaterialLocalizations absent and every Scaffold drawer
             // throws "No MaterialLocalizations found".
             localizationsDelegates: const [

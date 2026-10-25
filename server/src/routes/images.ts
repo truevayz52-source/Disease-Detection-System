@@ -7,6 +7,7 @@ import path from "node:path"
 import { requireAuth, requireRole } from "../auth/middleware.js"
 import { newId, query } from "../db.js"
 import { writeAudit } from "../lib/audit.js"
+import { assertCaseOpen } from "../lib/case-workflow.js"
 import { config } from "../config.js"
 
 export const imagesRouter = Router()
@@ -35,7 +36,7 @@ export function sniffImageType(buf: Buffer): "image/jpeg" | "image/png" | "image
 imagesRouter.post(
   "/notifications/:id/images",
   requireAuth,
-  requireRole("medical_officer", "pathologist", "public_health_analyst", "system_admin"),
+  requireRole("medical_officer", "pathologist", "public_health_analyst"),
   upload.single("file"),
   async (req, res) => {
     if (!await canAccessNotification(req.user!, req.params.id, true)) return res.status(403).json({ error: "Forbidden" })
@@ -44,10 +45,12 @@ imagesRouter.post(
       return res.status(400).json({ error: "File contents do not match the declared image type" })
     }
 
-    const notif = await query<any[]>("SELECT notification_id FROM death_notifications WHERE notification_id = ?", [
+    const notifRows = await query<any[]>("SELECT notification_id, status FROM death_notifications WHERE notification_id = ?", [
       req.params.id,
     ])
-    if (!notif.length) return res.status(404).json({ error: "Notification not found" })
+    if (!notifRows.length) return res.status(404).json({ error: "Notification not found" })
+    const notif = notifRows[0]
+    await assertCaseOpen(req.params.id)
 
     const imageId = newId("img")
     const fileHash = crypto.createHash("sha256").update(req.file.buffer).digest("hex")
@@ -80,9 +83,9 @@ imagesRouter.post(
       await query("DELETE FROM tele_pathology_images WHERE image_id = ?", [imageId])
       throw err
     }
-    await query("UPDATE death_notifications SET status = 'under_review' WHERE notification_id = ? AND status = 'pending_review'", [
-      req.params.id,
-    ])
+    if (notif.status === 'pending_review') {
+      await query("UPDATE death_notifications SET status = 'under_review' WHERE notification_id = ?", [req.params.id])
+    }
     await writeAudit(req, {
       action: "upload_telepathology_image",
       entityType: "tele_pathology_images",

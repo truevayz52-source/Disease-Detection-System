@@ -32,7 +32,7 @@ class _TranslatedTextState extends State<TranslatedText> {
   @override
   Widget build(BuildContext context) {
     final lang = context.watch<LanguageProvider>();
-    final canTranslate = !lang.isEnglish && !lang.isSignLanguage;
+    final canTranslate = !lang.isEnglish;
 
     final text = widget.text;
     final showingTranslated =

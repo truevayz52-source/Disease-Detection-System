@@ -23,7 +23,7 @@ export function AlertsBell() {
         {count > 0 && (
           <Badge
             variant="destructive"
-            className="absolute -top-1 -right-1 h-4.5 min-w-4.5 rounded-full px-1 text-[10px] tabular-nums"
+            className="absolute -top-1 -right-1 h-4.5 min-w-4.5 animate-pulse rounded-full px-1 text-[10px] tabular-nums"
           >
             {count > 99 ? "99+" : count}
           </Badge>

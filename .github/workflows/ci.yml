@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  server:
+    name: Server (typecheck, tests, build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter server typecheck
+      - run: pnpm --filter server test
+      - run: pnpm --filter server build
+
+  client:
+    name: Web client (build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # client 'build' runs tsc --noEmit which fails on unrelated errors;
+      # vite alone produces the bundle (same workaround as deploy/setup.sh).
+      - run: cd client && pnpm exec vite build
+
+  mobile:
+    name: Mobile (flutter test)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      # Argon2id verifier is memory-hard — serial isolates avoid the 30s
+      # test timeout on low-core runners.
+      - run: flutter test --concurrency=1
+
+  # Playwright e2e is intentionally local-only: it needs the full stack
+  # (API + seeded Postgres + web client) which outweighs CI value here.

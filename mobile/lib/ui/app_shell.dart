@@ -7,7 +7,6 @@ import '../data/auth_repository.dart';
 import '../data/sync_service.dart';
 import '../data/models.dart';
 import '../l10n/app_localizations.dart';
-import '../l10n/language_provider.dart';
 import 'language_menu.dart';
 import 'theme.dart';
 import 'widgets.dart';
@@ -66,17 +65,18 @@ class NavItem {
 }
 
 final kNavItems = <NavItem>[
-  NavItem('/dashboard', tr('Dashboard'), Icons.dashboard_outlined, kRoles),
+  NavItem('/dashboard', tr('Dashboard'), Icons.dashboard_outlined, const [
+    'medical_officer',
+    'pathologist',
+    'public_health_analyst',
+    'mortuary_clerk',
+    'executive',
+  ]),
   NavItem(
     '/notifications',
     tr('Death Notifications'),
     Icons.post_add_outlined,
-    [
-      'medical_officer',
-      'public_health_analyst',
-      'system_admin',
-      'mortuary_clerk',
-    ],
+    ['medical_officer', 'public_health_analyst', 'mortuary_clerk'],
   ),
   NavItem(
     '/pathology/queue',
@@ -87,65 +87,54 @@ final kNavItems = <NavItem>[
   NavItem('/autopsy', tr('Autopsy Reports'), Icons.medical_services_outlined, [
     'pathologist',
     'public_health_analyst',
-    'system_admin',
   ]),
   NavItem('/voice-autopsy', tr('Verbal Autopsy'), Icons.mic_none_outlined, [
     'medical_officer',
     'mortuary_clerk',
-    'system_admin',
-  ], implemented: false),
-  NavItem('/signals', tr('Signal Registry'), Icons.sensors_outlined, [
+  ]),
+  NavItem('/signals', tr('Mortality Signals'), Icons.sensors_outlined, [
     'medical_officer',
     'mortuary_clerk',
     'public_health_analyst',
-    'system_admin',
-  ], implemented: false),
+  ]),
   NavItem('/mpdsr', tr('MPDSR Workflows'), Icons.fact_check_outlined, [
     'medical_officer',
     'public_health_analyst',
-    'system_admin',
-  ], implemented: false),
+  ]),
   NavItem('/alerts', tr('Alerts'), Icons.warning_amber_outlined, [
     'medical_officer',
     'pathologist',
     'public_health_analyst',
-    'system_admin',
   ]),
   NavItem('/analytics', tr('Outbreak Analytics'), Icons.insights_outlined, [
     'public_health_analyst',
-    'system_admin',
   ]),
   NavItem('/analytics/map', tr('Outbreak Map'), Icons.map_outlined, [
     'public_health_analyst',
-    'system_admin',
-  ], implemented: false),
+  ]),
   NavItem(
     '/cross-border',
     tr('Cross-border Tracking'),
     Icons.compare_arrows_outlined,
-    ['medical_officer', 'public_health_analyst', 'system_admin'],
-    implemented: false,
+    ['medical_officer', 'public_health_analyst'],
   ),
   NavItem(
     '/resource-allocation',
     tr('Resource Forecasting'),
     Icons.query_stats_outlined,
-    ['public_health_analyst', 'system_admin'],
-    implemented: false,
+    ['public_health_analyst'],
   ),
   NavItem('/reports', tr('Reports'), Icons.description_outlined, [
     'public_health_analyst',
-    'system_admin',
     'executive',
-  ], implemented: false),
+  ]),
   NavItem('/gps-dashboard', tr('GPS Tracking'), Icons.gps_fixed_outlined, [
     'medical_officer',
-    'system_admin',
-  ], implemented: false),
+    'public_health_analyst',
+  ]),
   NavItem('/offline-sync', tr('Offline Sync'), Icons.sync_outlined, [
     'medical_officer',
     'mortuary_clerk',
-    'system_admin',
   ]),
   NavItem('/admin/users', tr('User Management'), Icons.group_outlined, [
     'system_admin',
@@ -158,14 +147,12 @@ final kNavItems = <NavItem>[
   ),
   NavItem('/alert-config', tr('Alert Thresholds'), Icons.tune_outlined, [
     'public_health_analyst',
-    'system_admin',
-  ], implemented: false),
+  ]),
   NavItem(
     '/security-dashboard',
     tr('Security Dashboard'),
     Icons.shield_outlined,
     ['system_admin'],
-    implemented: false,
   ),
   NavItem('/audit', tr('Audit Trail'), Icons.receipt_long_outlined, [
     'public_health_analyst',
@@ -198,13 +185,51 @@ class AppScaffold extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final sync = context.watch<SyncService>();
-    final lang = context.watch<LanguageProvider>();
     return Scaffold(
       appBar: AppBar(
         title: Text(context.tr(title)),
         actions: [
           ...?actions,
+          // Search + inbox — mirrors SiteHeader controls in the web app.
+          IconButton(
+            tooltip: context.tr('Search'),
+            icon: const Icon(Icons.search, size: 20),
+            onPressed: () => context.push('/search'),
+          ),
+          IconButton(
+            tooltip: context.tr('Notifications'),
+            icon: const Icon(Icons.notifications_outlined, size: 20),
+            onPressed: () => context.push('/notifications-center'),
+          ),
           const LanguageMenuButton(),
+          if (sync.syncing)
+            const Padding(
+              padding: EdgeInsets.only(right: 6),
+              child: Center(
+                child: SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            ),
+          if (sync.conflictCount > 0)
+            Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: IconButton(
+                tooltip: context.tr('{n} sync conflict(s) need review', {
+                  'n': sync.conflictCount,
+                }),
+                onPressed: () => context.push('/offline-sync'),
+                icon: Badge(
+                  label: Text('${sync.conflictCount}'),
+                  child: const Icon(
+                    Icons.merge_type_outlined,
+                    color: Color(0xFF9A3412),
+                  ),
+                ),
+              ),
+            ),
           if (sync.pendingCount > 0)
             Padding(
               padding: const EdgeInsets.only(right: 4),
@@ -226,36 +251,6 @@ class AppScaffold extends StatelessWidget {
       body: SafeArea(
         child: Column(
           children: [
-            if (lang.isSignLanguage)
-              Container(
-                width: double.infinity,
-                color: const Color(0xFFE0F2FE),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
-                ),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.accessibility_new,
-                      size: 14,
-                      color: Color(0xFF075985),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        context.tr(
-                          'Zimbabwe Sign Language selected — text is shown in English; signed video guidance is a planned module.',
-                        ),
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Color(0xFF075985),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
             if (!sync.isOnline)
               Container(
                 width: double.infinity,

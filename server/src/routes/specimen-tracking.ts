@@ -7,7 +7,7 @@ import { writeAudit } from "../lib/audit.js"
 export const specimenTrackingRouter = Router()
 
 // Create specimen tracking record
-specimenTrackingRouter.post("/", requireAuth, requireRole("medical_officer", "mortuary_clerk", "pathologist", "system_admin"), async (req, res) => {
+specimenTrackingRouter.post("/", requireAuth, requireRole("medical_officer", "mortuary_clerk", "pathologist"), async (req, res) => {
   const schema = z.object({
     notificationId: z.string(),
     specimenType: z.string(),
@@ -34,7 +34,7 @@ specimenTrackingRouter.post("/", requireAuth, requireRole("medical_officer", "mo
 })
 
 // Update specimen location
-specimenTrackingRouter.patch("/:trackingId/location", requireAuth, requireRole("medical_officer", "mortuary_clerk", "pathologist", "system_admin"), async (req, res) => {
+specimenTrackingRouter.patch("/:trackingId/location", requireAuth, requireRole("medical_officer", "mortuary_clerk", "pathologist"), async (req, res) => {
   const schema = z.object({
     location: z.string(),
     action: z.string(),
@@ -47,7 +47,7 @@ specimenTrackingRouter.patch("/:trackingId/location", requireAuth, requireRole("
   
   // Get current tracking log
   const current = await query<any[]>("SELECT tracking_log FROM specimen_tracking WHERE tracking_id = ?", [req.params.trackingId])
-  const trackingLog = JSON.parse(current[0]?.tracking_log || "[]")
+  const trackingLog = typeof current[0]?.tracking_log === "string" ? JSON.parse(current[0].tracking_log) : (current[0]?.tracking_log ?? [])
   
   // Add new log entry
   trackingLog.push({ location, timestamp: new Date(), action, user: req.user!.userId })
@@ -64,7 +64,7 @@ specimenTrackingRouter.patch("/:trackingId/location", requireAuth, requireRole("
 })
 
 // Get specimen tracking by QR
-specimenTrackingRouter.get("/qr/:qr", requireAuth, requireRole("medical_officer", "mortuary_clerk", "pathologist", "public_health_analyst", "system_admin"), async (req, res) => {
+specimenTrackingRouter.get("/qr/:qr", requireAuth, requireRole("medical_officer", "mortuary_clerk", "pathologist", "public_health_analyst"), async (req, res) => {
   const specimen = await query<any[]>(
     `SELECT st.*, u.full_name as collector_name, u2.full_name as current_holder_name
      FROM specimen_tracking st

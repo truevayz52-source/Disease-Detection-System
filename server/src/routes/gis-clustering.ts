@@ -6,7 +6,7 @@ import { query } from "../db.js"
 export const gisClusteringRouter = Router()
 
 // DBSCAN-based spatial clustering for outbreak detection
-gisClusteringRouter.post("/cluster", requireAuth, requireRole("public_health_analyst", "system_admin"), async (req, res) => {
+gisClusteringRouter.post("/cluster", requireAuth, requireRole("public_health_analyst"), async (req, res) => {
   const schema = z.object({
     district: z.string().optional(),
     diseaseCategory: z.string().optional(),
@@ -25,17 +25,17 @@ gisClusteringRouter.post("/cluster", requireAuth, requireRole("public_health_ana
     `SELECT 
       dn.notification_id,
       dn.date_of_death,
-      JSON_UNQUOTE(dn.gps_coordinates->'$.lat') as lat,
-      JSON_UNQUOTE(dn.gps_coordinates->'$.lng') as lng,
+      dn.gps_coordinates->>'lat' as lat,
+      dn.gps_coordinates->>'lng' as lng,
       f.district,
       ic.disease_category
      FROM death_notifications dn
      JOIN facilities f ON f.facility_id = dn.facility_id
      JOIN icd_codes ic ON ic.icd_code = dn.preliminary_icd_code
-     WHERE dn.gps_coordinates IS NOT NULL
+     WHERE dn.gps_coordinates IS NOT NULL AND dn.status <> 'rejected'
      ${district ? 'AND f.district = ?' : ''}
      ${diseaseCategory ? 'AND ic.disease_category = ?' : ''}
-     AND dn.date_of_death >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+     AND dn.date_of_death >= CURRENT_DATE - (? * INTERVAL '1 day')
      ORDER BY dn.date_of_death DESC`,
     [district, diseaseCategory, days].filter(Boolean)
   )
@@ -128,22 +128,22 @@ gisClusteringRouter.post("/cluster", requireAuth, requireRole("public_health_ana
 })
 
 // Get spatial heatmap data
-gisClusteringRouter.get("/heatmap", requireAuth, requireRole("public_health_analyst", "system_admin"), async (req, res) => {
+gisClusteringRouter.get("/heatmap", requireAuth, requireRole("public_health_analyst"), async (req, res) => {
   const district = req.query.district as string
   const days = parseInt(req.query.days as string) || "30"
   
   const deaths = await query<any[]>(
     `SELECT 
-      JSON_UNQUOTE(dn.gps_coordinates->'$.lat') as lat,
-      JSON_UNQUOTE(dn.gps_coordinates->'$.lng') as lng,
+      dn.gps_coordinates->>'lat' as lat,
+      dn.gps_coordinates->>'lng' as lng,
       ic.disease_category,
       dn.date_of_death
      FROM death_notifications dn
      JOIN facilities f ON f.facility_id = dn.facility_id
      JOIN icd_codes ic ON ic.icd_code = dn.preliminary_icd_code
-     WHERE dn.gps_coordinates IS NOT NULL
+     WHERE dn.gps_coordinates IS NOT NULL AND dn.status <> 'rejected'
      ${district ? 'AND f.district = ?' : ''}
-     AND dn.date_of_death >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+     AND dn.date_of_death >= CURRENT_DATE - (? * INTERVAL '1 day')
      ORDER BY dn.date_of_death DESC`,
     [district, days].filter(Boolean)
   )

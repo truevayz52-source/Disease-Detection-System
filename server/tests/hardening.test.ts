@@ -4,6 +4,11 @@ import { sniffImageType } from "../src/routes/images.js"
 import { communityApiKey } from "../src/routes/community-surveillance.js"
 import { detectOutbreaksCoalesced } from "../src/lib/outbreak.js"
 import { config } from "../src/config.js"
+import { pool } from "../src/db.js"
+
+// detectOutbreaksCoalesced opens pool connections when a real DB is up —
+// close them or the test process never exits.
+test.after(async () => { await pool.end() })
 
 test("sniffImageType accepts real image magic bytes", () => {
   assert.equal(sniffImageType(Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0, 0])), "image/jpeg")

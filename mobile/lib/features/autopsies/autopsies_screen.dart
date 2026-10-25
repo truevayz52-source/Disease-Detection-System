@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../data/auth_repository.dart';
 import '../../data/dds_repository.dart';
 import '../../data/models.dart';
+import '../../data/mutation_service.dart';
 import '../../ui/app_shell.dart';
 import '../../ui/theme.dart';
 import '../../ui/translated_text.dart';
@@ -174,12 +175,27 @@ class _AutopsyDetailScreenState extends State<AutopsyDetailScreen> {
     if (ok != true || !mounted) return;
     setState(() => _finalizing = true);
     try {
-      await context.read<DdsRepository>().finalizeAutopsy(widget.id);
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(tr('Autopsy finalized.'))));
-      }
-      await _load();
+      // Optimistic finalize — queued + signed on replay when offline.
+      final res = await context.read<MutationService>().http(
+        'PATCH',
+        '/autopsies/${widget.id}/finalize',
+        entityType: 'autopsy',
+        entityId: widget.id,
+        overlay: {'status': 'finalized'},
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            res.status == MutationStatus.queued
+                ? tr('Offline — finalize queued and will sign on reconnect.')
+                : res.status == MutationStatus.synced
+                ? tr('Autopsy finalized.')
+                : res.error?.message ?? tr('Finalize failed'),
+          ),
+        ),
+      );
+      if (res.status == MutationStatus.synced) await _load();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context)
@@ -193,7 +209,7 @@ class _AutopsyDetailScreenState extends State<AutopsyDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final role = context.watch<AuthRepository>().user?.role;
-    final canFinalize = const ['pathologist', 'system_admin'].contains(role);
+    final canFinalize = const ['pathologist'].contains(role);
     final a = _a;
 
     return AppScaffold(

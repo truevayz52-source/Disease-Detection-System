@@ -6,7 +6,7 @@ import { query } from "../db.js"
 export const environmentalDataRouter = Router()
 
 // Add environmental data for forecasting
-environmentalDataRouter.post("/", requireAuth, requireRole("public_health_analyst", "system_admin"), async (req, res) => {
+environmentalDataRouter.post("/", requireAuth, requireRole("public_health_analyst"), async (req, res) => {
   const schema = z.object({
     district: z.string(),
     dataType: z.enum(["rainfall", "temperature", "humidity", "water_level"]),
@@ -31,7 +31,7 @@ environmentalDataRouter.post("/", requireAuth, requireRole("public_health_analys
 })
 
 // Get environmental data for forecasting
-environmentalDataRouter.get("/:district", requireAuth, requireRole("public_health_analyst", "system_admin"), async (req, res) => {
+environmentalDataRouter.get("/:district", requireAuth, requireRole("public_health_analyst"), async (req, res) => {
   const dataType = req.query.type as string
   const days = parseInt(req.query.days as string) || "30"
   
@@ -43,7 +43,7 @@ environmentalDataRouter.get("/:district", requireAuth, requireRole("public_healt
     params.push(dataType)
   }
   
-  queryStr += ` AND recorded_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY) ORDER BY recorded_at DESC`
+  queryStr += ` AND recorded_at >= CURRENT_DATE - (? * INTERVAL '1 day') ORDER BY recorded_at DESC`
   params.push(days)
   
   const data = await query<any[]>(queryStr, params)

@@ -12,7 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { api, authedFileUrl, getToken } from "@/lib/api"
 import { useAuth } from "@/lib/auth"
 import { fmtDate, fmtDateTime, STATUS_LABELS, STATUS_VARIANTS } from "@/lib/format"
-import type { AutopsyReport, DeathNotification, TelepathologyImage } from "@/lib/types"
+import type { AutopsyReport, DeathNotification, MedicalCertification, TelepathologyImage } from "@/lib/types"
 import { usePreferences } from "@/lib/preferences"
 import { TranslatedBlock } from "@/components/translated-block"
 
@@ -20,6 +20,7 @@ interface Detail {
   notification: DeathNotification
   images: TelepathologyImage[]
   autopsy: (AutopsyReport & { pathologist_name?: string }) | null
+  certification: (MedicalCertification & { certified_by_name?: string }) | null
 }
 
 export default function NotificationDetailPage() {const{t}=usePreferences();
@@ -46,7 +47,7 @@ export default function NotificationDetailPage() {const{t}=usePreferences();
   }
 
   const n = data?.notification
-  const canUpload = user && ["medical_officer", "pathologist", "public_health_analyst", "system_admin"].includes(user.role)
+  const canUpload = user && ["medical_officer", "pathologist", "public_health_analyst"].includes(user.role)
   const certUrl = `/api/notifications/${id}/certificate?token=${encodeURIComponent(getToken() ?? "")}`
 
   return (
@@ -83,6 +84,24 @@ export default function NotificationDetailPage() {const{t}=usePreferences();
                   <dd>{n.facility_name}, {n.district}</dd>
                   <dt className="text-muted-foreground">{t("Reported by")}</dt>
                   <dd>{n.reported_by_name} · {fmtDate(n.created_at)}</dd>
+                  {n.assigned_to && (
+                    <>
+                      <dt className="text-muted-foreground">{t("Assigned to")}</dt>
+                      <dd>{n.assignee_name ?? n.assigned_to} {n.overdue ? <Badge variant="destructive">{t("Overdue")}</Badge> : null}</dd>
+                    </>
+                  )}
+                  {n.review_due_at && (
+                    <>
+                      <dt className="text-muted-foreground">{t("Review due")}</dt>
+                      <dd>{fmtDateTime(n.review_due_at)}</dd>
+                    </>
+                  )}
+                  {n.rejection_reason && (
+                    <>
+                      <dt className="text-muted-foreground">{t("Rejection reason")}</dt>
+                      <dd className="sm:col-span-1 text-destructive">{n.rejection_reason}</dd>
+                    </>
+                  )}
                   {n.clinical_summary && (
                     <>
                       <dt className="text-muted-foreground">{t("Clinical summary")}</dt>
@@ -169,7 +188,7 @@ export default function NotificationDetailPage() {const{t}=usePreferences();
                 ) : (
                   <p className="text-muted-foreground">{t("No autopsy report yet.")}</p>
                 )}
-                {n.status === "finalized" && (
+                {(n.status === "finalized" || n.status === "certified") && (
                   <Button variant="outline" size="sm" className="w-full" asChild>
                     <a href={certUrl} target="_blank" rel="noreferrer">
                       <Printer className="size-4" /> Death certificate
@@ -178,6 +197,32 @@ export default function NotificationDetailPage() {const{t}=usePreferences();
                 )}
               </CardContent>
             </Card>
+
+            {data?.certification && (
+              <Card className="shadow-lg">
+                <CardHeader>
+                  <CardTitle className="text-sm">{t("Medical certification")}</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">{t("Certified by")}</span>
+                    <span>{data.certification.certified_by_name ?? data.certification.certified_by}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">{t("Manner of death")}</span>
+                    <span>{data.certification.manner_of_death}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">{t("Final ICD")}</span>
+                    <span>{data.certification.final_icd_code}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">{t("Cause of death")}</span>
+                    <span>{data.certification.final_cause_of_death}</span>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </div>
         </div>
       )}

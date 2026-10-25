@@ -6,7 +6,7 @@ export const fhirRouter = Router()
 
 // Patient-level FHIR data carries PII — restrict to clinical/analyst roles,
 // consistent with /api/patients (executives get aggregates, not records).
-const fhirReaders = requireRole("public_health_analyst", "pathologist", "system_admin")
+const fhirReaders = requireRole("public_health_analyst", "pathologist")
 
 // Death observations join the finalized autopsy cause (falling back to the
 // preliminary ICD/clinical summary) and the facility for place of death.
@@ -17,7 +17,7 @@ const DEATH_SELECT = `SELECT dn.*, a.final_cause_of_death, f.facility_name
 
 // Patients gain deceasedDateTime from their latest linked notification.
 const PATIENT_SELECT = `SELECT p.*,
-  (SELECT MAX(dn.date_of_death) FROM death_notifications dn WHERE dn.patient_id = p.patient_id) AS date_of_death
+  (SELECT MAX(dn.date_of_death) FROM death_notifications dn WHERE dn.patient_id = p.patient_id AND dn.status <> 'rejected') AS date_of_death
   FROM patients p`
 
 /** Port of BIIMZim `signal_to_fhir_observation()` — signal → FHIR R4 Observation. */
@@ -28,7 +28,7 @@ function signalToFhirObservation(s: any) {
     meta: {
       versionId: "1",
       lastUpdated: new Date(s.updated_at ?? s.reported_at).toISOString(),
-      profile: ["http://mohcc.gov.zw/fhir/StructureDefinition/biim-signal-observation"],
+      profile: ["http://mohcc.gov.zw/fhir/StructureDefinition/mortality-signal-observation"],
     },
     status: "final",
     category: [{
@@ -42,9 +42,9 @@ function signalToFhirObservation(s: any) {
       coding: [{
         system: "http://loinc.org",
         code: "95544-3",
-        display: "Public Health Behavioural Intelligence Signal",
+        display: "Mortality Surveillance Signal",
       }],
-      text: s.title ?? "Community Signal",
+      text: s.title ?? "Mortality Signal",
     },
     subject: { display: "General Population" },
     effectiveDateTime: new Date(s.reported_at).toISOString(),
@@ -53,15 +53,15 @@ function signalToFhirObservation(s: any) {
     valueString: s.description ?? s.title ?? "",
     component: [
       {
-        code: { coding: [{ system: "http://mohcc.gov.zw/fhir/cs/biim", code: "signal-type", display: "Signal Type" }] },
+        code: { coding: [{ system: "http://mohcc.gov.zw/fhir/cs/mortality", code: "signal-type", display: "Signal Type" }] },
         valueString: s.signal_type,
       },
       {
-        code: { coding: [{ system: "http://mohcc.gov.zw/fhir/cs/biim", code: "risk-score", display: "Risk Score" }] },
+        code: { coding: [{ system: "http://mohcc.gov.zw/fhir/cs/mortality", code: "risk-score", display: "Risk Score" }] },
         valueInteger: s.risk_score ?? 0,
       },
       {
-        code: { coding: [{ system: "http://mohcc.gov.zw/fhir/cs/biim", code: "workflow-stage", display: "Workflow Stage" }] },
+        code: { coding: [{ system: "http://mohcc.gov.zw/fhir/cs/mortality", code: "workflow-stage", display: "Workflow Stage" }] },
         valueString: s.workflow_stage,
       },
     ],
@@ -115,7 +115,7 @@ fhirRouter.get("/Observation", requireAuth, fhirReaders, async (req, res) => {
     `SELECT s.*, f.facility_name FROM health_signals s LEFT JOIN facilities f ON f.facility_id = s.facility_id
      ORDER BY s.reported_at DESC LIMIT 100`,
   )
-  const deaths = await query<any[]>(`${DEATH_SELECT} ORDER BY dn.created_at DESC LIMIT 100`)
+  const deaths = await query<any[]>(`${DEATH_SELECT} WHERE dn.status <> 'rejected' ORDER BY dn.created_at DESC LIMIT 100`)
   const entries = [
     ...signals.map((s) => ({ resource: signalToFhirObservation(s) })),
     ...deaths.map((d) => ({ resource: deathToFhirObservation(d) })),
@@ -133,7 +133,7 @@ fhirRouter.get("/Observation/:id", requireAuth, fhirReaders, async (req, res) =>
     return rows[0] ? res.json(signalToFhirObservation(rows[0])) : res.status(404).json({ error: "Not found" })
   }
   if (id.startsWith("dds-death-")) {
-    const rows = await query<any[]>(`${DEATH_SELECT} WHERE dn.notification_id = ?`, [id.slice(10)])
+    const rows = await query<any[]>(`${DEATH_SELECT} WHERE dn.status <> 'rejected' AND dn.notification_id = ?`, [id.slice(10)])
     return rows[0] ? res.json(deathToFhirObservation(rows[0])) : res.status(404).json({ error: "Not found" })
   }
   res.status(404).json({ error: "Not found" })

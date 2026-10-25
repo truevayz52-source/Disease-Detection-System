@@ -4,45 +4,19 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../data/api_client.dart';
 import 'app_localizations.dart';
 
-/// One entry per official language of Zimbabwe (Constitution, s.6) — mirrors
-/// i18n/languages.json at the repo root. `written=false` marks Zimbabwe Sign
-/// Language: it has no text dictionary, so the UI renders English plus an
-/// explanatory notice.
+/// Active UI languages — English, Shona and isiNdebele. Mirrors
+/// i18n/languages.json at the repo root.
 class LanguageInfo {
   final String code;
   final String name;
   final String nativeName;
-  final bool written;
-  const LanguageInfo(
-    this.code,
-    this.name,
-    this.nativeName, {
-    this.written = true,
-  });
+  const LanguageInfo(this.code, this.name, this.nativeName);
 }
 
 const kLanguages = <LanguageInfo>[
   LanguageInfo('en', 'English', 'English'),
   LanguageInfo('sn', 'Shona', 'chiShona'),
   LanguageInfo('nd', 'Ndebele', 'isiNdebele'),
-  LanguageInfo('ny', 'Chewa', 'Chichewa / Chinyanja'),
-  LanguageInfo('sbn', 'Chibarwe', 'Chibarwe'),
-  LanguageInfo('kck', 'Kalanga', 'TjiKalanga'),
-  LanguageInfo('huc', 'Koisan (Tshwa)', 'Tshwa'),
-  LanguageInfo('nmq', 'Nambya', 'ChiNambya'),
-  LanguageInfo('ndc', 'Ndau', 'ChiNdau'),
-  LanguageInfo('ts', 'Shangani (Tsonga)', 'Xitsonga'),
-  LanguageInfo('st', 'Sotho', 'Sesotho'),
-  LanguageInfo('toi', 'Tonga', 'chiTonga'),
-  LanguageInfo('tn', 'Tswana', 'Setswana'),
-  LanguageInfo('ve', 'Venda', 'Tshivenda'),
-  LanguageInfo('xh', 'Xhosa', 'isiXhosa'),
-  LanguageInfo(
-    'zsl',
-    'Zimbabwe Sign Language',
-    'Zimbabwe Sign Language',
-    written: false,
-  ),
 ];
 
 final kLanguageLocales = kLanguages.map((l) => Locale(l.code)).toList();
@@ -68,7 +42,6 @@ class LanguageProvider extends ChangeNotifier {
   Locale get locale => _locale;
   String get code => _locale.languageCode;
   bool get isEnglish => _locale.languageCode == 'en';
-  bool get isSignLanguage => _locale.languageCode == 'zsl';
 
   ApiClient? _api;
   bool _restored = false;

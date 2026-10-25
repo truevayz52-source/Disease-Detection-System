@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react"
 import useSWR from "swr"
 import { toast } from "sonner"
-import { Activity, AlertTriangle, CheckCircle2, Loader2, RefreshCw, Search, Siren, SlidersHorizontal, Sparkles, Users } from "lucide-react"
+import { Activity, AlertTriangle, CheckCircle2, Loader2, RefreshCw, Search, Siren, SlidersHorizontal, Users } from "lucide-react"
 import { SiteHeader } from "@/components/site-header"
 import { StatCard } from "@/components/stat-card"
 import { Badge } from "@/components/ui/badge"
@@ -11,7 +11,6 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { api } from "@/lib/api"
 import { useAuth } from "@/lib/auth"
-import { aiExplainAlert } from "@/lib/ai"
 import { fmtDateTime, riskVariant, STATUS_LABELS } from "@/lib/format"
 import type { OutbreakAlert } from "@/lib/types"
 import { usePreferences } from "@/lib/preferences"
@@ -23,51 +22,6 @@ function parseCluster(raw: string | null): Record<string, unknown> | null {
   } catch {
     return null
   }
-}
-
-// Plain-language AI explanation for one alert card — aggregates only.
-function AlertExplain({ alert }: { alert: OutbreakAlert }) {
-  const { language, t } = usePreferences()
-  const [text, setText] = useState<string | null>(null)
-  const [pending, setPending] = useState(false)
-  const cluster = parseCluster(alert.cluster_data)
-
-  async function explain() {
-    setPending(true)
-    try {
-      setText(await aiExplainAlert({
-        alertType: alert.alert_type,
-        disease: alert.disease_category ?? "",
-        district: alert.district ?? "",
-        caseCount: alert.case_count ?? 0,
-        severity: `${alert.risk_score ?? 0}/100`,
-        triggeredAt: alert.triggered_date,
-        windowDays: typeof cluster?.window_hours === "number" ? Math.round(cluster.window_hours / 24) : 0,
-      }, language))
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : t("AI explanation failed"))
-    } finally {
-      setPending(false)
-    }
-  }
-
-  return (
-    <div className="space-y-2">
-      <Button type="button" size="sm" variant="outline" onClick={explain} disabled={pending}>
-        {pending ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
-        {pending ? t("Explaining…") : t("Explain with AI")}
-      </Button>
-      {text && (
-        <div className="rounded-md border border-dashed bg-muted/30 p-3">
-          <p className="whitespace-pre-wrap text-sm">{text}</p>
-          <p className="mt-2 flex items-center gap-1 text-[10px] text-muted-foreground">
-            <Sparkles className="size-3" />
-            {t("AI-generated draft — verify against surveillance data")}
-          </p>
-        </div>
-      )}
-    </div>
-  )
 }
 
 export default function AlertsPage() {const{t}=usePreferences();
@@ -85,7 +39,7 @@ export default function AlertsPage() {const{t}=usePreferences();
     (u: string) => api(u),
     { refreshInterval: 30_000 },
   )
-  const canResolve = user && ["public_health_analyst", "system_admin"].includes(user.role)
+  const canResolve = user && ["public_health_analyst"].includes(user.role)
   const { data: geo } = useSWR<{ provinces: { province_id: string; province_name: string }[]; districts: { district_id: string; province: string; district: string }[] }>("/facilities/geo", (u: string) => api(u))
   const { data: stats } = useSWR<{ active: number; resolved: number; critical: number; highRisk: number; activeCases: number; total: number }>(
     "/alerts/stats",
@@ -189,6 +143,7 @@ export default function AlertsPage() {const{t}=usePreferences();
             <SelectContent>
               <SelectItem value="all">{t("All types")}</SelectItem>
               <SelectItem value="outbreak">{t("Outbreak")}</SelectItem>
+              <SelectItem value="early_warning">{t("Early warning")}</SelectItem>
               <SelectItem value="mpdsr">{t("MPDSR")}</SelectItem>
             </SelectContent>
           </Select>
@@ -241,7 +196,7 @@ export default function AlertsPage() {const{t}=usePreferences();
               ? "border-emerald-500/40"
               : critical
                 ? "border-red-600/50 ring-1 ring-red-600/20"
-                : risk >= 50
+                : a.alert_type === "early_warning" || risk >= 50
                   ? "border-amber-500/50"
                   : "border-border"
             const bar = risk >= 75 ? "bg-red-600" : risk >= 50 ? "bg-amber-500" : "bg-blue-500"
@@ -264,8 +219,11 @@ export default function AlertsPage() {const{t}=usePreferences();
                       </div>
                     </div>
                     <div className="flex flex-col items-end gap-1.5">
-                      <Badge variant={a.alert_type === "mpdsr" ? "secondary" : riskVariant(risk)}>
-                        {a.alert_type === "mpdsr" ? "MPDSR" : `Risk ${risk}`}
+                      <Badge
+                        variant={a.alert_type === "mpdsr" ? "secondary" : a.alert_type === "early_warning" ? "outline" : riskVariant(risk)}
+                        className={a.alert_type === "early_warning" ? "border-amber-500 text-amber-600" : undefined}
+                      >
+                        {a.alert_type === "mpdsr" ? "MPDSR" : a.alert_type === "early_warning" ? t("Early warning") : `Risk ${risk}`}
                       </Badge>
                       <Badge variant={a.status === "active" ? "destructive" : "outline"}>{t(STATUS_LABELS[a.status] ?? a.status)}</Badge>
                     </div>
@@ -291,8 +249,6 @@ export default function AlertsPage() {const{t}=usePreferences();
                     <span className="col-span-full">{t("Channels:")} {a.dispatched_channels ?? "dashboard"}</span>
                     {a.resolved_at && <span className="text-emerald-600">{t("Resolved:")} {fmtDateTime(a.resolved_at)}</span>}
                   </div>
-
-                  <AlertExplain alert={a} />
 
                   {canResolve && a.status === "active" && (
                     <div className="flex justify-end pt-1">

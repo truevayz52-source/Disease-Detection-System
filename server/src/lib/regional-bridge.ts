@@ -62,7 +62,7 @@ async function districtAggregate(days: number): Promise<DistrictRow[]> {
        FROM death_notifications dn
        JOIN facilities f ON f.facility_id = dn.facility_id
        JOIN icd_codes ic ON ic.icd_code = dn.preliminary_icd_code
-      WHERE dn.date_of_death >= DATE_SUB(NOW(), INTERVAL ? DAY)
+      WHERE dn.status <> 'rejected' AND dn.date_of_death >= NOW() - (? * INTERVAL '1 day')
       GROUP BY f.district, ic.disease_category`,
     [days],
   )
@@ -212,7 +212,7 @@ export async function forwardToOpenhim(days: number) {
     method: "POST",
     headers: {
       "content-type": "application/fhir+json",
-      authorization: `Bearer ${process.env.OPENHIM_TOKEN}`,
+      authorization: `Custom ${process.env.OPENHIM_TOKEN}`,
     },
     body: JSON.stringify(bundle),
   })

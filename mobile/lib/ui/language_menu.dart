@@ -6,8 +6,9 @@ import '../l10n/app_localizations.dart';
 import '../l10n/language_provider.dart';
 import 'theme.dart';
 
-/// Globe menu listing all 16 official Zimbabwean languages. Instant switch —
-/// the provider notifies MaterialApp which rebuilds with the new locale.
+/// Translate menu listing the supported languages (English, chiShona,
+/// isiNdebele). Instant switch — the provider notifies MaterialApp which
+/// rebuilds with the new locale.
 /// Mounted in every AppScaffold app bar and on the profile screen.
 class LanguageMenuButton extends StatelessWidget {
   const LanguageMenuButton({super.key});
@@ -41,11 +42,7 @@ class LanguageMenuButton extends StatelessWidget {
                       Text(l.nativeName, style: const TextStyle(fontSize: 14)),
                       if (l.code != 'en')
                         Text(
-                          l.written
-                              ? l.name
-                              : context.tr(
-                                  'Signed video guidance is a planned module',
-                                ),
+                          l.name,
                           style: const TextStyle(
                             fontSize: 11,
                             color: DdsColors.mutedForeground,

@@ -1,6 +1,8 @@
 import type { NextFunction, Request, Response } from "express"
-import { consumeCode } from "./totp.js"
+import jwt from "jsonwebtoken"
+import * as jose from "jose"
 import { query } from "../db.js"
+import { config } from "../config.js"
 import { tokenHash, verifyToken } from "./jwt.js"
 
 export type Role = "medical_officer" | "pathologist" | "public_health_analyst" | "system_admin" | "mortuary_clerk" | "executive"
@@ -44,36 +46,14 @@ function extractToken(req: Request): string | null {
   return null
 }
 
-/** Stateful JWT check: valid signature AND live (non-revoked) session row. */
-export async function requireAuth(req: Request, res: Response, next: NextFunction) {
-  const token = extractToken(req)
-  if (!token) return res.status(401).json({ error: "Unauthorized" })
+const USER_COLS = `u.user_id, u.email, u.full_name, u.role, u.facility_id, u.province, u.district, u.status,
+  u.phone, u.department, u.language, u.timezone, u.avatar_url, u.last_login_at,
+  u.failed_login_attempts, u.locked_until`
 
-  const payload = verifyToken(token)
-  if (!payload) return res.status(401).json({ error: "Invalid or expired token" })
-
-  const rows = await query<any[]>(
-    `SELECT s.session_id, s.expires_at, s.revoked, u.user_id, u.email, u.full_name, u.role, u.facility_id, u.province, u.district, u.status,
-            u.phone, u.department, u.language, u.timezone, u.avatar_url, u.last_login_at,
-            u.failed_login_attempts, u.locked_until
-     FROM sessions s JOIN users u ON u.user_id = s.user_id
-     WHERE s.token_hash = ?`,
-    [tokenHash(token)],
-  )
-  const row = rows[0]
-  if (!row || row.revoked || new Date(row.expires_at) < new Date() || row.status !== "active") {
-    return res.status(401).json({ error: "Session expired or revoked" })
-  }
-
-  // Check if account is locked
-  if (row.locked_until && new Date(row.locked_until) > new Date()) {
-    return res.status(403).json({ error: "Account locked due to too many failed login attempts" })
-  }
-
-  req.token = token
-  req.user = {
+function toAuthUser(row: any, sessionId: string): AuthUser {
+  return {
     userId: row.user_id,
-    sessionId: row.session_id,
+    sessionId,
     email: row.email,
     name: row.full_name,
     role: row.role as Role,
@@ -89,6 +69,84 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     failedLoginAttempts: row.failed_login_attempts || 0,
     lockedUntil: row.locked_until,
   }
+}
+
+/** Legacy path: our JWT signature AND a live (non-revoked) sessions row. */
+async function authenticateLegacy(token: string): Promise<AuthUser | null> {
+  if (!verifyToken(token)) return null
+  const rows = await query<any[]>(
+    `SELECT s.session_id, s.expires_at, s.revoked, ${USER_COLS}
+     FROM sessions s JOIN users u ON u.user_id = s.user_id
+     WHERE s.token_hash = ?`,
+    [tokenHash(token)],
+  )
+  const row = rows[0]
+  if (!row || row.revoked || new Date(row.expires_at) < new Date() || row.status !== "active") return null
+  return toAuthUser(row, row.session_id)
+}
+
+// New-style Supabase projects can sign tokens with asymmetric keys published
+// at the auth JWKS endpoint instead of the legacy shared secret.
+const supabaseJwks = config.supabaseJwksUrl ? jose.createRemoteJWKSet(new URL(config.supabaseJwksUrl)) : null
+
+/** Verify a Supabase Auth JWT — legacy HS256 secret first, then JWKS. */
+async function supabasePayload(token: string): Promise<Record<string, any> | null> {
+  if (config.supabaseJwtSecret) {
+    try {
+      return jwt.verify(token, config.supabaseJwtSecret, { algorithms: ["HS256"], audience: "authenticated" }) as Record<string, any>
+    } catch { /* fall through to JWKS */ }
+  }
+  if (supabaseJwks) {
+    try {
+      const { payload } = await jose.jwtVerify(token, supabaseJwks, { audience: "authenticated" })
+      return payload as Record<string, any>
+    } catch { return null }
+  }
+  return null
+}
+
+/** Supabase path: JWT verified by JWT secret or JWKS,
+ *  aud = "authenticated", sub = auth.users.id -> users.auth_user_id. */
+async function authenticateSupabase(token: string): Promise<AuthUser | null> {
+  const payload = await supabasePayload(token)
+  if (!payload) return null
+  const sub = typeof payload?.sub === "string" ? payload.sub : null
+  if (!sub) return null
+  const rows = await query<any[]>(`SELECT ${USER_COLS} FROM users u WHERE u.auth_user_id = ?`, [sub])
+  const row = rows[0]
+  if (!row || row.status !== "active") return null
+  const sessionId = typeof payload.session_id === "string" ? payload.session_id : `supabase:${sub}`
+  return toAuthUser(row, sessionId)
+}
+
+/** Shared token resolver — legacy sessions first, then Supabase Auth JWTs.
+ *  Roles and facility scoping always come from the users table either way. */
+export async function authenticateToken(token: string): Promise<AuthUser | null> {
+  return (await authenticateLegacy(token)) ?? (await authenticateSupabase(token))
+}
+
+export async function requireAuth(req: Request, res: Response, next: NextFunction) {
+  const token = extractToken(req)
+  if (!token) return res.status(401).json({ error: "Unauthorized" })
+
+  const user = await authenticateToken(token)
+  if (!user) return res.status(401).json({ error: "Invalid or expired token" })
+
+  // Check if account is locked
+  if (user.lockedUntil && new Date(user.lockedUntil) > new Date()) {
+    return res.status(403).json({ error: "Account locked due to too many failed login attempts" })
+  }
+
+  req.token = token
+  req.user = user
+
+  // Executive role is strictly view-only. Enforcing at authentication means
+  // no later route can accidentally allow a write by adding the role to a
+  // requireRole() list (see also: case-workflow comments).
+  if (req.user.role === "executive" && ["POST", "PUT", "PATCH", "DELETE"].includes(req.method)) {
+    return res.status(403).json({ error: "Forbidden: executive role is view-only" })
+  }
+
   next()
 }
 
@@ -99,99 +157,6 @@ export function requireRole(...roles: Role[]) {
     if (!roles.includes(req.user.role)) {
       return res.status(403).json({ error: "Forbidden: insufficient role" })
     }
-    next()
-  }
-}
-
-/** Fine-grained permission check for specific actions */
-export function requirePermission(permission: string) {
-  return (req: Request, res: Response, next: NextFunction) => {
-    if (!req.user) return res.status(401).json({ error: "Unauthorized" })
-    
-    // Role-based permission mapping
-    const rolePermissions: Record<Role, string[]> = {
-      medical_officer: ["create_notification", "view_facility_data", "initiate_mpdsr"],
-      pathologist: ["view_pathology", "create_autopsy", "review_images"],
-      public_health_analyst: ["view_analytics", "configure_alerts", "view_audit"],
-      system_admin: ["*"], // Full access
-      mortuary_clerk: ["create_notification", "view_facility_data", "generate_certificates"],
-      executive: ["view_analytics", "view_reports"], // View-only access
-    }
-    
-    const permissions = rolePermissions[req.user.role]
-    if (!permissions || (!permissions.includes("*") && !permissions.includes(permission))) {
-      return res.status(403).json({ error: "Forbidden: insufficient permissions" })
-    }
-    next()
-  }
-}
-
-/** Facility-scoped access control for medical officers and clerks */
-export function requireFacilityAccess() {
-  return (req: Request, res: Response, next: NextFunction) => {
-    if (!req.user) return res.status(401).json({ error: "Unauthorized" })
-    
-    // System admins and public health analysts have full access
-    if (req.user.role === "system_admin" || req.user.role === "public_health_analyst") {
-      return next()
-    }
-    
-    // Pathologists and executives don't need facility access
-    if (req.user.role === "pathologist" || req.user.role === "executive") {
-      return next()
-    }
-    
-    // Medical officers and clerks must have a facility assigned
-    if (!req.user.facilityId) {
-      return res.status(403).json({ error: "Forbidden: no facility assigned" })
-    }
-    
-    next()
-  }
-}
-
-/** View-only access for executive role */
-export function requireViewOnly() {
-  return (req: Request, res: Response, next: NextFunction) => {
-    if (!req.user) return res.status(401).json({ error: "Unauthorized" })
-    
-    if (req.user.role === "executive") {
-      // Block any mutation methods
-      if (["POST", "PUT", "PATCH", "DELETE"].includes(req.method)) {
-        return res.status(403).json({ error: "Forbidden: executive role is view-only" })
-      }
-    }
-    
-    next()
-  }
-}
-
-/** Require 2FA for sensitive operations */
-export function require2FA() {
-  return async (req: Request, res: Response, next: NextFunction) => {
-    if (!req.user) return res.status(401).json({ error: "Unauthorized" })
-    
-    // Check if user has 2FA enabled
-    const rows = await query<any[]>(
-      "SELECT enabled FROM two_factor_auth WHERE user_id = ?",
-      [req.user.userId]
-    )
-    
-    const tfaEnabled = Boolean(rows[0]?.enabled)
-    
-    // For now, 2FA is optional - skip if not enabled
-    // In production, you might want to enforce 2FA for certain roles
-    if (!tfaEnabled) {
-      return next()
-    }
-    
-    // Check for 2FA code in headers
-    const tfaCode = req.headers["x-2fa-code"] as string
-    if (!tfaCode) {
-      return res.status(403).json({ error: "Forbidden: 2FA code required" })
-    }
-    
-    if (!await consumeCode(req.user.userId, tfaCode)) return res.status(403).json({ error: "Invalid or already used 2FA code" })
     next()
   }
 }

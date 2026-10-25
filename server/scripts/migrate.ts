@@ -1,30 +1,38 @@
 import fs from "node:fs/promises"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
-import { getPool, query } from "../src/db.js"
+import { getPool, acquireAdvisoryLock, releaseAdvisoryLock } from "../src/db.js"
 
-const directory = fileURLToPath(new URL("../../db/", import.meta.url))
+// Applies supabase/migrations/*.sql in order, tracked in public.schema_migrations.
+// `supabase db push` is the primary path; this script exists so a plain Node
+// deployment can migrate without the Supabase CLI.
+const directory = fileURLToPath(new URL("../../supabase/migrations/", import.meta.url))
+const conn = await getPool().getConnection()
 try {
-  const [lock] = await query<any[]>("SELECT GET_LOCK('dds_schema_migration', 30) AS acquired")
-  if (!lock?.acquired) throw new Error("Another migration is running")
-  for (const filename of (await fs.readdir(directory)).filter(f => /^\d+.*\.sql$/.test(f)).sort()) {
-    const sql = (await fs.readFile(path.join(directory, filename), "utf8")).replace(/^--.*$/gm, "")
-    for (const statement of sql.split(";").map(s => s.trim()).filter(Boolean)) {
-      // Recover safely from a partially applied migration without ignoring other errors.
-      const column = statement.match(/^ALTER TABLE (\w+) ADD COLUMN (\w+)/i)
-      const index = statement.match(/^ALTER TABLE (\w+) ADD (?:UNIQUE )?INDEX (\w+)/i)
-      if (column) {
-        const rows = await query<any[]>("SELECT 1 FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?", column.slice(1))
-        if (rows.length) continue
+  if (!await acquireAdvisoryLock(conn, "dds_schema_migration", 30)) throw new Error("Another migration is running")
+  try {
+    await conn.query("CREATE TABLE IF NOT EXISTS schema_migrations (version text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())")
+    const [appliedRows] = await conn.query<any[]>("SELECT version FROM schema_migrations")
+    const applied = new Set<string>(appliedRows.map((r: any) => r.version))
+    for (const filename of (await fs.readdir(directory)).filter(f => /^\d+.*\.sql$/.test(f)).sort()) {
+      const version = filename.replace(/\.sql$/, "")
+      if (applied.has(version)) continue
+      const sql = await fs.readFile(path.join(directory, filename), "utf8")
+      await conn.beginTransaction()
+      try {
+        await conn.query(sql) // pg simple protocol runs all statements in the file
+        await conn.query("INSERT INTO schema_migrations (version) VALUES (?)", [version])
+        await conn.commit()
+        console.log(`Applied ${filename}`)
+      } catch (err) {
+        await conn.rollback()
+        throw err
       }
-      if (index) {
-        const rows = await query<any[]>("SELECT 1 FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ?", index.slice(1))
-        if (rows.length) continue
-      }
-      await query(statement)
     }
-    console.log(`Applied ${filename}`)
+  } finally {
+    await releaseAdvisoryLock(conn, "dds_schema_migration")
   }
 } finally {
+  conn.release()
   await getPool().end()
 }

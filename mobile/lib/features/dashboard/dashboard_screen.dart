@@ -64,11 +64,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final k = _data?.kpis;
     final canCreate =
         user != null &&
-        const [
-          'medical_officer',
-          'public_health_analyst',
-          'system_admin',
-        ].contains(user.role);
+        const ['medical_officer', 'public_health_analyst'].contains(user.role);
 
     return AppScaffold(
       title: tr('Dashboard'),

@@ -6,8 +6,8 @@ import { writeAudit } from "../lib/audit.js"
 
 export const playbooksRouter = Router()
 
-const viewRoles = ["medical_officer", "mortuary_clerk", "public_health_analyst", "system_admin"] as const
-const manageRoles = ["public_health_analyst", "system_admin"] as const
+const viewRoles = ["medical_officer", "mortuary_clerk", "public_health_analyst"] as const
+const manageRoles = ["public_health_analyst"] as const
 
 playbooksRouter.get("/", requireAuth, requireRole(...viewRoles), async (_req, res) => {
   const items = await query<any[]>("SELECT * FROM response_playbooks ORDER BY name")
@@ -17,7 +17,7 @@ playbooksRouter.get("/", requireAuth, requireRole(...viewRoles), async (_req, re
 const createSchema = z.object({
   name: z.string().min(2).max(255),
   description: z.string().max(4000).optional(),
-  signalType: z.enum(["rumour", "outbreak_report", "misinformation", "community_alert"]).optional(),
+  signalType: z.enum(["unreported_death", "suspicious_death", "maternal_perinatal", "death_cluster", "community_alert"]).optional(),
   diseaseCategory: z.string().max(100).optional(),
   steps: z.array(z.string().min(1).max(500)).min(1),
 })

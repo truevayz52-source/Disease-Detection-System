@@ -21,7 +21,7 @@ const PROVINCES = [
 const PLAYBOOKS = [
   {
     name: "Suspected cholera outbreak",
-    signalType: "outbreak_report",
+    signalType: "death_cluster",
     diseaseCategory: "Cholera/AWD",
     description: "Standard MOHCC response for clustered acute watery diarrhoea reports.",
     steps: [
@@ -35,7 +35,7 @@ const PLAYBOOKS = [
   },
   {
     name: "Unexplained deaths cluster",
-    signalType: "community_alert",
+    signalType: "death_cluster",
     diseaseCategory: "Unexplained mortality",
     description: "Escalation path for multiple community deaths with unknown cause.",
     steps: [
@@ -48,7 +48,7 @@ const PLAYBOOKS = [
   },
   {
     name: "Maternal death (MPDSR) notification",
-    signalType: "community_alert",
+    signalType: "maternal_perinatal",
     diseaseCategory: "Maternal mortality",
     description: "Mandatory maternal death surveillance and response workflow.",
     steps: [
@@ -61,7 +61,7 @@ const PLAYBOOKS = [
   },
   {
     name: "Media misinformation about mortality data",
-    signalType: "misinformation",
+    signalType: "community_alert",
     diseaseCategory: null,
     description: "Response to false claims circulating about deaths or cause-of-death data.",
     steps: [

@@ -6,6 +6,7 @@ import { signToken, tokenHash } from "../auth/jwt.js"
 import { consumeCode } from "../auth/totp.js"
 import { requireAuth, rateLimiter } from "../auth/middleware.js"
 import { writeAudit } from "../lib/audit.js"
+import { linkSupabaseAuthUser } from "../lib/supabase.js"
 import { config } from "../config.js"
 
 export const authRouter = Router()
@@ -22,7 +23,7 @@ authRouter.post("/login", rateLimiter(30), async (req, res) => {
 
   const { email, password } = parsed.data
   const rows = await query<any[]>(
-    "SELECT user_id, full_name, email, password_hash, role, facility_id, province, district, status, failed_login_attempts, locked_until FROM users WHERE email = ? OR user_id IN (SELECT user_id FROM email_aliases WHERE email = ? AND expires_at > NOW())",
+    "SELECT user_id, full_name, email, password_hash, role, facility_id, province, district, status, failed_login_attempts, locked_until, auth_user_id FROM users WHERE email = ? OR user_id IN (SELECT user_id FROM email_aliases WHERE email = ? AND expires_at > NOW())",
     [email.toLowerCase(), email.toLowerCase()],
   )
   const user = rows[0]
@@ -63,12 +64,15 @@ authRouter.post("/login", rateLimiter(30), async (req, res) => {
   if (tfa?.enabled) {
     if (!parsed.data.code) return res.status(403).json({ error: "Enter your authenticator or recovery code", requiresTwoFactor: true })
     if (!await consumeCode(user.user_id, parsed.data.code)) {
-      await query("UPDATE users SET failed_login_attempts=failed_login_attempts+1, locked_until=IF(failed_login_attempts>=5, DATE_ADD(NOW(), INTERVAL 15 MINUTE), NULL) WHERE user_id=?", [user.user_id])
+      await query("UPDATE users SET failed_login_attempts=failed_login_attempts+1, locked_until=CASE WHEN failed_login_attempts+1>=5 THEN NOW()+INTERVAL '15 minutes' ELSE NULL END WHERE user_id=?", [user.user_id])
       await writeAudit(req, { userId: user.user_id, action: "login_failed_2fa", entityType: "auth" })
       return res.status(403).json({ error: "Invalid or already used verification code" })
     }
   }
   await recordLogin(true, undefined, user.user_id)
+  // Lazy migration: after a verified legacy login, link/create the matching
+  // Supabase Auth identity. Non-blocking — the legacy token is issued anyway.
+  void linkSupabaseAuthUser(user, password)
   // Reset failed login attempts on successful login
   await query("UPDATE users SET failed_login_attempts = 0, locked_until = NULL, last_login_at = ? WHERE user_id = ?", [new Date(), user.user_id])
 
@@ -102,7 +106,7 @@ authRouter.post("/login", rateLimiter(30), async (req, res) => {
 })
 
 authRouter.post("/logout", requireAuth, async (req, res) => {
-  await query("UPDATE sessions SET revoked = 1 WHERE token_hash = ?", [tokenHash(req.token!)])
+  await query("UPDATE sessions SET revoked = true WHERE token_hash = ?", [tokenHash(req.token!)])
   await writeAudit(req, { action: "logout", entityType: "auth", entityId: req.user!.sessionId })
   res.json({ ok: true })
 })
@@ -131,7 +135,7 @@ authRouter.post("/change-password", requireAuth, async (req, res) => {
   const hash = await hashPassword(newPassword)
   await query("UPDATE users SET password_hash = ?, failed_login_attempts = 0, profile_updated_at = ? WHERE user_id = ?", [hash, new Date(), req.user!.userId])
   // Revoke all other sessions so the new password is required everywhere.
-  await query("UPDATE sessions SET revoked = 1 WHERE user_id = ? AND session_id <> ?", [
+  await query("UPDATE sessions SET revoked = true WHERE user_id = ? AND session_id <> ?", [
     req.user!.userId,
     req.user!.sessionId,
   ])

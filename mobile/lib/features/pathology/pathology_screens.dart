@@ -7,6 +7,7 @@ import '../../data/api_client.dart';
 import '../../data/dds_repository.dart';
 import '../../data/draft_store.dart';
 import '../../data/models.dart';
+import '../../data/mutation_service.dart';
 import '../../data/sync_service.dart';
 import '../../ui/app_shell.dart';
 import '../../ui/theme.dart';
@@ -262,25 +263,49 @@ class _PathologyReviewScreenState extends State<PathologyReviewScreen> {
   Future<void> _save(bool finalize) async {
     setState(() => _saving = finalize ? 'final' : 'draft');
     try {
-      await context.read<DdsRepository>().saveAutopsy(widget.id, {
-        'internalObservations': internalObservations,
-        'toxicologyResults': toxicologyResults,
-        'legalThresholdFlag': legalThresholdFlag,
-        'finalIcdCode': finalIcdCode,
-        'finalCauseOfDeath': finalCauseOfDeath,
-        'digitalSignature': digitalSignature,
-      }, finalize: finalize);
+      // Optimistic: the case flips to autopsy_complete/finalized instantly;
+      // offline the whole report is queued and replayed (and signed) later.
+      final res = await context.read<MutationService>().http(
+        'POST',
+        '/notifications/${widget.id}/autopsy',
+        body: {
+          'internalObservations': internalObservations,
+          'toxicologyResults': toxicologyResults,
+          'legalThresholdFlag': legalThresholdFlag,
+          'finalIcdCode': finalIcdCode,
+          'finalCauseOfDeath': finalCauseOfDeath,
+          'digitalSignature': digitalSignature,
+          'finalize': finalize,
+        },
+        entityType: 'death_notification',
+        entityId: widget.id,
+        coalesceKey: 'autopsy:${widget.id}',
+        overlay: {'status': finalize ? 'finalized' : 'autopsy_complete'},
+      );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            finalize
-                ? tr('Autopsy finalized — certificate available.')
-                : tr('Draft autopsy saved.'),
+            switch (res.status) {
+              MutationStatus.queued => tr(
+                'Offline — autopsy queued and will be signed and saved on reconnect.',
+              ),
+              MutationStatus.synced =>
+                finalize
+                    ? tr('Autopsy finalized — certificate available.')
+                    : tr('Draft autopsy saved.'),
+              MutationStatus.conflict => tr(
+                'Conflict — a newer autopsy already exists on the server.',
+              ),
+              MutationStatus.rejected =>
+                res.error?.message ?? tr('Save failed'),
+            },
           ),
         ),
       );
-      context.pushReplacement('/notifications/${widget.id}');
+      if (res.status != MutationStatus.rejected) {
+        context.pushReplacement('/notifications/${widget.id}');
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context)

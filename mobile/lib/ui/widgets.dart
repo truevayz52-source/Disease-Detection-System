@@ -294,7 +294,11 @@ class StatusBadge extends StatelessWidget {
       'under_review' => (const Color(0xFFDCFCE7), const Color(0xFF166534)),
       'autopsy_complete' ||
       'draft' => (const Color(0xFFF1F5F9), const Color(0xFF475569)),
+      'certified' => (const Color(0xFFE0F2FE), const Color(0xFF075985)),
       'finalized' || 'resolved' => (Colors.white, const Color(0xFF475569)),
+      'rejected' => (const Color(0xFFFEE2E2), DdsColors.destructive),
+      'pending_sync' => (const Color(0xFFFEF3C7), const Color(0xFF92400E)),
+      'conflict' => (const Color(0xFFFFF7ED), const Color(0xFF9A3412)),
       _ => (const Color(0xFFF1F5F9), const Color(0xFF475569)),
     };
     return Container(

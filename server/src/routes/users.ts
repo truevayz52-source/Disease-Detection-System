@@ -19,6 +19,18 @@ usersRouter.get("/", requireAuth, ADMIN, async (_req, res) => {
   res.json({ items: rows })
 })
 
+usersRouter.get(
+  "/assignable-pathologists",
+  requireAuth,
+  requireRole("public_health_analyst", "pathologist"),
+  async (_req, res) => {
+    const rows = await query<any[]>(
+      "SELECT user_id, full_name FROM users WHERE role = 'pathologist' AND status = 'active' ORDER BY full_name",
+    )
+    res.json({ items: rows })
+  },
+)
+
 const createSchema = z.object({
   fullName: z.string().min(2),
   email: z.string().email(),
@@ -125,7 +137,7 @@ usersRouter.patch("/:id", requireAuth, ADMIN, async (req, res) => {
   if (!result.affectedRows) return res.status(404).json({ error: "User not found" })
   if (d.status === "disabled" || d.password !== undefined) {
     // Kill live sessions when an account is disabled or password reset.
-    await query("UPDATE sessions SET revoked = 1 WHERE user_id = ?", [req.params.id])
+    await query("UPDATE sessions SET revoked = true WHERE user_id = ?", [req.params.id])
   }
   await writeAudit(req, { action: "update_user", entityType: "users", entityId: req.params.id, details: d })
   res.json({ ok: true })

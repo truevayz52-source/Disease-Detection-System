@@ -75,10 +75,14 @@ const kStatusLabels = {
   'pending_review': 'Pending review',
   'under_review': 'Under review',
   'autopsy_complete': 'Autopsy complete',
+  'certified': 'Certified',
   'finalized': 'Finalized',
+  'rejected': 'Rejected',
   'active': 'Active',
   'resolved': 'Resolved',
   'draft': 'Draft',
+  'pending_sync': 'Pending sync',
+  'conflict': 'Sync conflict',
 };
 
 ThemeData ddsTheme() {

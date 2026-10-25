@@ -7,7 +7,7 @@ import { writeAudit } from "../lib/audit.js"
 export const verbalAutopsyRouter = Router()
 
 // Create verbal autopsy record (WHO/InterVA-5 standards)
-verbalAutopsyRouter.post("/", requireAuth, requireRole("medical_officer", "pathologist", "public_health_analyst", "system_admin"), async (req, res) => {
+verbalAutopsyRouter.post("/", requireAuth, requireRole("medical_officer", "pathologist", "public_health_analyst"), async (req, res) => {
   const schema = z.object({
     notificationId: z.string(),
     interviewerName: z.string(),
@@ -33,7 +33,7 @@ verbalAutopsyRouter.post("/", requireAuth, requireRole("medical_officer", "patho
 })
 
 // Get verbal autopsy
-verbalAutopsyRouter.get("/:notificationId", requireAuth, requireRole("medical_officer", "pathologist", "public_health_analyst", "system_admin"), async (req, res) => {
+verbalAutopsyRouter.get("/:notificationId", requireAuth, requireRole("medical_officer", "pathologist", "public_health_analyst"), async (req, res) => {
   const va = await query<any[]>(
     "SELECT * FROM verbal_autopsies WHERE notification_id = ?",
     [req.params.notificationId]

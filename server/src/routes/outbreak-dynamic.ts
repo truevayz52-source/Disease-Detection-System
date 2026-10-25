@@ -7,14 +7,14 @@ import { writeAudit } from "../lib/audit.js"
 export const outbreakDynamicRouter = Router()
 
 // Dynamic outbreak threshold engine with CUSUM and moving averages
-outbreakDynamicRouter.get("/thresholds", requireAuth, requireRole("public_health_analyst", "system_admin"), async (_req, res) => {
+outbreakDynamicRouter.get("/thresholds", requireAuth, requireRole("public_health_analyst"), async (_req, res) => {
   const thresholds = await query<any[]>(
     `SELECT * FROM alert_thresholds WHERE is_active = true ORDER BY created_at DESC`
   )
   res.json({ items: thresholds })
 })
 
-outbreakDynamicRouter.post("/thresholds", requireAuth, requireRole("public_health_analyst", "system_admin"), async (req, res) => {
+outbreakDynamicRouter.post("/thresholds", requireAuth, requireRole("public_health_analyst"), async (req, res) => {
   const schema = z.object({
     district: z.string().optional(),
     diseaseCategory: z.string().optional(),
@@ -41,7 +41,7 @@ outbreakDynamicRouter.post("/thresholds", requireAuth, requireRole("public_healt
 })
 
 // CUSUM-based dynamic outbreak detection
-outbreakDynamicRouter.post("/detect-dynamic", requireAuth, requireRole("public_health_analyst", "system_admin"), async (req, res) => {
+outbreakDynamicRouter.post("/detect-dynamic", requireAuth, requireRole("public_health_analyst"), async (req, res) => {
   const schema = z.object({
     district: z.string(),
     diseaseCategory: z.string(),
@@ -57,15 +57,16 @@ outbreakDynamicRouter.post("/detect-dynamic", requireAuth, requireRole("public_h
   // Calculate baseline statistics — exclude the window under test so an
   // active outbreak doesn't inflate its own baseline and suppress the signal.
   const baselineRows = await query<any[]>(
-    `SELECT COUNT(*) as case_count, DATE(date_of_death) as death_date
+    `SELECT COUNT(*) as case_count, dn.date_of_death::date as death_date
      FROM death_notifications dn
      JOIN patients p ON p.patient_id = dn.patient_id
      JOIN facilities f ON f.facility_id = dn.facility_id
      JOIN icd_codes ic ON ic.icd_code = dn.preliminary_icd_code
      WHERE f.district = ? AND ic.disease_category = ?
-     AND dn.date_of_death >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
-     AND dn.date_of_death < DATE_SUB(CURDATE(), INTERVAL ? DAY)
-     GROUP BY DATE(date_of_death)
+     AND dn.status <> 'rejected'
+     AND dn.date_of_death >= CURRENT_DATE - (? * INTERVAL '1 day')
+     AND dn.date_of_death < CURRENT_DATE - (? * INTERVAL '1 day')
+     GROUP BY dn.date_of_death::date
      ORDER BY death_date`,
     [district, diseaseCategory, windowDays * 2, windowDays]
   )
@@ -76,14 +77,15 @@ outbreakDynamicRouter.post("/detect-dynamic", requireAuth, requireRole("public_h
   
   // Calculate recent cases for CUSUM
   const recentRows = await query<any[]>(
-    `SELECT COUNT(*) as case_count, DATE(date_of_death) as death_date
+    `SELECT COUNT(*) as case_count, dn.date_of_death::date as death_date
      FROM death_notifications dn
      JOIN patients p ON p.patient_id = dn.patient_id
      JOIN facilities f ON f.facility_id = dn.facility_id
      JOIN icd_codes ic ON ic.icd_code = dn.preliminary_icd_code
      WHERE f.district = ? AND ic.disease_category = ?
-     AND dn.date_of_death >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
-     GROUP BY DATE(date_of_death)
+     AND dn.status <> 'rejected'
+     AND dn.date_of_death >= CURRENT_DATE - (? * INTERVAL '1 day')
+     GROUP BY dn.date_of_death::date
      ORDER BY death_date`,
     [district, diseaseCategory, windowDays]
   )
@@ -119,7 +121,7 @@ outbreakDynamicRouter.post("/detect-dynamic", requireAuth, requireRole("public_h
 })
 
 // Instant alert for high-risk diseases
-outbreakDynamicRouter.post("/instant-alert", requireAuth, requireRole("medical_officer", "public_health_analyst", "system_admin"), async (req, res) => {
+outbreakDynamicRouter.post("/instant-alert", requireAuth, requireRole("medical_officer", "public_health_analyst"), async (req, res) => {
   const schema = z.object({
     notificationId: z.string(),
     diseaseCode: z.string(),
@@ -141,7 +143,7 @@ outbreakDynamicRouter.post("/instant-alert", requireAuth, requireRole("medical_o
        FROM death_notifications dn
        JOIN facilities f ON f.facility_id = dn.facility_id
        JOIN icd_codes ic ON ic.icd_code = dn.preliminary_icd_code
-       WHERE dn.notification_id = ?`,
+       WHERE dn.notification_id = ? AND dn.status <> 'rejected'`,
       [alertId, JSON.stringify({ instant_trigger: true, disease_code: diseaseCode }), notificationId]
     )
     

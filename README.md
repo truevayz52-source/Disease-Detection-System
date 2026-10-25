@@ -12,7 +12,8 @@ client/      React 19 SPA (Vite, Tailwind, shadcn/base-ui)      → http://local
 server/      Express + TypeScript REST API (JWT, Argon2, RBAC)  → http://localhost:4000
 analytics/   FastAPI ML service (scikit-learn DBSCAN + LR)      → http://localhost:8000
 mobile/      Flutter app (Android/iOS/Windows) — same REST API
-db/          MariaDB/MySQL schema (dds_db)                      → 127.0.0.1:3306
+db/          legacy MariaDB/MySQL schema (source of the port)
+supabase/    PostgreSQL migrations (Supabase)                   → DATABASE_URL
 e2e/         Playwright suite (TC-01 … TC-05, RBAC, audit)
 ```
 
@@ -59,7 +60,7 @@ Python services (all optional, all in `analytics/`, run via `C:\dds-venv`):
 ## Prerequisites
 
 - Node.js 20+ and pnpm 11
-- MariaDB/MySQL running on `127.0.0.1:3306` (XAMPP `C:\xap` works — root, no password)
+- PostgreSQL — either a Supabase project (hosted) or a local Postgres instance
 - Python 3.12 for the analytics service (optional — the API falls back without it)
 
 ## Setup
@@ -68,14 +69,19 @@ Python services (all optional, all in `analytics/`, run via `C:\dds-venv`):
 # 1. Install dependencies
 pnpm install --ignore-scripts
 
-# 2. Create and load the database
-mysql -u root -e "CREATE DATABASE IF NOT EXISTS dds_db"
-mysql -u root dds_db < db/001-schema.sql
+# 2. Create the database
+#    Option A — Supabase: create a project, then either `supabase db push`
+#    (after `supabase link --project-ref <ref>`) or paste supabase/migrations/*
+#    into the dashboard SQL editor in order.
+#    Option B — local Postgres: `createdb dds_db`, then run `pnpm migrate`
+#    which applies supabase/migrations/ to DATABASE_URL.
 
 # 3. Configure the API
 cp server/.env.example server/.env   # or create it — see variables below
+#    Set DATABASE_URL (Supabase Supavisor pooler URI or local Postgres).
 
-# 4. Seed demo data (facilities, ICD-10 codes, users, a demo outbreak cluster)
+# 4. Migrate (local/Node path) + seed demo data
+#    (facilities, ICD-10 codes, users, a demo outbreak cluster)
 pnpm migrate
 pnpm seed
 
@@ -117,17 +123,19 @@ visible immediately on the Alerts / Analytics / Map pages.
 ```env
 PORT=4000
 CLIENT_ORIGIN=http://localhost:5173
-MYSQL_HOST=127.0.0.1
-MYSQL_PORT=3306
-MYSQL_USER=root
-MYSQL_PASSWORD=
-MYSQL_DATABASE=dds_db
+DATABASE_URL=postgresql://postgres.<ref>:<password>@aws-0-<region>.pooler.supabase.com:6543/postgres
+#   Supabase Supavisor pooler URI (port 6543), or local: postgresql://postgres:postgres@127.0.0.1:5432/dds_db
+DATABASE_SSL=true              # required for Supabase; false only for local dev
+SUPABASE_URL=https://<ref>.supabase.co   # server-side only (Phase 2 auth)
+SUPABASE_SERVICE_ROLE_KEY=<service-role> # server-side only — never shipped to clients
+SUPABASE_JWT_SECRET=<jwt secret>         # Phase 2 hybrid auth
 JWT_SECRET=<random hex>
 JWT_EXPIRES_HOURS=8
+SIGNATURE_HMAC_KEY=<64 hex chars>  # HMAC for autopsy/certification report signing; dev derives from JWT_SECRET
 ANALYTICS_URL=http://127.0.0.1:8000
 OUTBREAK_THRESHOLD=8
 OUTBREAK_WINDOW_HOURS=48
-MYSQL_TIMEZONE=+02:00          # session TZ pinned per pooled connection
+DB_TIMEZONE=Africa/Harare      # session TZ pinned per pooled connection
 COMMUNITY_API_KEY=             # optional x-api-key gate on /api/community/report
 WHISPER_URL=http://127.0.0.1:8001/transcribe   # batch transcription
 WHISPER_API_KEY=               # shared secret for the Python service
@@ -171,24 +179,16 @@ recording to `POST /voice/transcribe` uses the same model in batch mode.
 Languages: English and Shona; Ndebele is not supported by Whisper and falls
 back to manual entry.
 
-## Localization — all 16 official languages
+## Localization — English, Shona and Ndebele
 
-Both clients (web `client/` and Flutter `mobile/`) ship a full language
-selector covering the 16 official Zimbabwean languages:
+Both clients (web `client/` and Flutter `mobile/`) ship a language selector
+covering three Zimbabwean languages:
 
-| Code | Language | Code | Language |
-|------|----------|------|----------|
-| `en` | English (base) | `sbn` | Chibarwe (draft) |
-| `sn` | chiShona | `kck` | Kalanga (draft) |
-| `nd` | isiNdebele | `huc` | Koisan/Tshwa (draft) |
-| `ny` | Chewa | `nmq` | Nambya (draft) |
-| `ts` | Xitsonga/Shangani | `ndc` | Ndau (draft) |
-| `st` | Sesotho | `toi` | chiTonga |
-| `tn` | Setswana | `ve` | Tshivenḓa |
-| `xh` | isiXhosa | `zsl` | ZW Sign Language¹ |
-
-¹ ZSL renders English text plus a notice that signed video guidance is a
-planned module.
+| Code | Language |
+|------|----------|
+| `en` | English (base) |
+| `sn` | chiShona |
+| `nd` | isiNdebele |
 
 - **Canonical source:** `i18n/lang/<code>.json` — keys are the English source
   strings; missing entries always fall back to English (never raw keys).
@@ -204,8 +204,7 @@ planned module.
   medical glossary substitutes known terms and otherwise shows the original.
 
 All non-English dictionaries are marked **draft — pending native-speaker
-review**; low-resource languages (Chibarwe, Kalanga, Koisan/Tshwa, Nambya,
-Ndau) have seed coverage only.
+review**.
 
 ## API overview
 
@@ -217,9 +216,9 @@ All endpoints are under `/api`. Every request except `/auth/login` requires
 | Auth | `POST /auth/login`, `GET /auth/me`, `POST /auth/logout` |
 | ICD | `GET /icd-codes?q=` |
 | Facilities | `GET/POST /facilities`, `PATCH /facilities/:id` |
-| Notifications | `GET/POST /notifications`, `GET/PATCH /notifications/:id`, `POST /notifications/:id/autopsy` |
+| Notifications | `GET/POST /notifications`, `GET/PATCH /notifications/:id`, `POST /notifications/:id/autopsy`, `POST /notifications/:id/certify`, `POST /notifications/:id/reject`, `PATCH /notifications/:id/assign` |
 | Tele-pathology | `POST/GET /notifications/:id/images`, `GET /images/:id/file` |
-| Autopsies | `GET /autopsies`, `GET /autopsies/:id`, `PATCH /autopsies/:id/finalize` |
+| Autopsies | `GET /autopsies`, `GET /autopsies/:id`, `GET /autopsies/:id/verify`, `PATCH /autopsies/:id/finalize` |
 | Alerts | `GET /alerts`, `GET /alerts/active-count`, `PATCH /alerts/:id/resolve` |
 | Analytics | `GET /analytics/summary|trends|geo|clusters`, `POST /analytics/detect`, `GET /analytics/engine-status` |
 | Admin | `GET/POST /users`, `PATCH /users/:id`, `GET /audit`, `GET /audit/verify` |
@@ -242,6 +241,8 @@ checks.
 
 ## Notes
 
+- **In-process caches** (`facilities`, `geo`, `dashboard`, `audit/verify`) live in a single Node process. They keep the throttled Supabase link responsive, but will not synchronise across multiple API instances or survive a server restart.
+- **DB link performance** is bounded by the configured `DATABASE_URL` (Supavisor pooler). Caches mitigate this; a deployed droplet or a faster local/self-hosted Postgres removes the bottleneck entirely.
 - **Optional integrations:** see [INTEGRATIONS.md](INTEGRATIONS.md) for SMTP,
   local Whisper, pathology inference, WHO ICD-11 reference lookup, and limits.
 

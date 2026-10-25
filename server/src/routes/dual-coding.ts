@@ -7,7 +7,7 @@ import { writeAudit } from "../lib/audit.js"
 export const dualCodingRouter = Router()
 
 // Search ICD codes with predictive suggestions
-dualCodingRouter.get("/search", requireAuth, requireRole("medical_officer", "pathologist", "public_health_analyst", "system_admin"), async (req, res) => {
+dualCodingRouter.get("/search", requireAuth, requireRole("medical_officer", "pathologist", "public_health_analyst"), async (req, res) => {
   const q = req.query.q as string
   const version = req.query.version as string || "ICD-10"
   
@@ -27,7 +27,7 @@ dualCodingRouter.get("/search", requireAuth, requireRole("medical_officer", "pat
 })
 
 // Convert ICD-10 to ICD-11 (simplified mapping - in production use WHO API)
-dualCodingRouter.post("/convert", requireAuth, requireRole("medical_officer", "pathologist", "public_health_analyst", "system_admin"), async (req, res) => {
+dualCodingRouter.post("/convert", requireAuth, requireRole("medical_officer", "pathologist", "public_health_analyst"), async (req, res) => {
   const schema = z.object({
     icd10Code: z.string(),
   })

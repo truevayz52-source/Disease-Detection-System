@@ -4,7 +4,9 @@ import 'package:provider/provider.dart';
 
 import '../../data/auth_repository.dart';
 import '../../data/dds_repository.dart';
+import '../../data/draft_store.dart';
 import '../../data/models.dart';
+import '../../data/mutation_service.dart';
 import '../../ui/app_shell.dart';
 import '../../ui/theme.dart';
 import '../../ui/widgets.dart';
@@ -22,6 +24,7 @@ class NotificationsScreen extends StatefulWidget {
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
   List<DeathNotification> _items = [];
+  List<DeathNotification> _localPending = [];
   bool _loading = true;
   Object? _error;
 
@@ -31,10 +34,23 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   bool _mpdsrOnly = false;
   bool _newestFirst = true;
 
+  MutationService? _mutations;
+
   @override
   void initState() {
     super.initState();
     _load();
+    // Re-merge whenever the mutation layer writes/queues/clears ops so the
+    // pending rows appear and disappear without a manual refresh.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _mutations = context.read<MutationService>()..addListener(_load);
+    });
+  }
+
+  @override
+  void dispose() {
+    _mutations?.removeListener(_load);
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -42,8 +58,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       _loading = true;
       _error = null;
     });
+    // Locally captured records that haven't synced yet render inline —
+    // optimistic UI: a case filed offline never looks lost.
+    final repo = context.read<DdsRepository>();
+    final pending = await _pendingLocalRows();
     try {
-      final items = await context.read<DdsRepository>().notifications(
+      final items = await repo.notifications(
         q: _q,
         status: _status,
         district: _district,
@@ -51,17 +71,58 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       if (mounted) {
         setState(() {
           _items = items;
+          _localPending = pending;
           _loading = false;
         });
       }
     } catch (e) {
       if (mounted) {
         setState(() {
-          _error = e;
+          _localPending = pending;
+          // Keep showing local records even when the server read fails —
+          // an empty list offline would look like data loss.
+          _error = pending.isEmpty ? e : null;
           _loading = false;
         });
       }
     }
+  }
+
+  /// PENDING `offline_cases` notification records as list rows.
+  Future<List<DeathNotification>> _pendingLocalRows() async {
+    final reports = await OfflineCaseStore.pending();
+    return [
+      for (final r in reports)
+        if (r['kind'] == 'notification')
+          _localRow(r['local_id']?.toString() ?? '', r),
+    ];
+  }
+
+  static DeathNotification _localRow(String id, Map<String, dynamic> r) {
+    final d = (r['data'] as Map?)?.cast<String, dynamic>() ?? const {};
+    final p = (d['patient'] as Map?)?.cast<String, dynamic>() ?? const {};
+    return DeathNotification(
+      notificationId: id,
+      patientId: '',
+      patientName: p['fullName']?.toString() ?? '',
+      nationalId: p['nationalId']?.toString(),
+      age: (p['age'] as num?)?.toInt(),
+      gender: p['gender']?.toString() ?? '',
+      residentialAddress: p['residentialAddress']?.toString(),
+      facilityId: d['facilityId']?.toString() ?? '',
+      facilityName: tr('Saved on this device'),
+      district: '',
+      province: '',
+      dateOfDeath: d['dateOfDeath']?.toString() ?? '',
+      preliminaryIcdCode: d['preliminaryIcdCode']?.toString() ?? '',
+      icdDescription: '',
+      diseaseCategory: '',
+      clinicalSummary: d['clinicalSummary']?.toString(),
+      status: 'pending_sync',
+      isMaternalPerinatal: d['isMaternalPerinatal'] == true,
+      reportedByName: tr('This device'),
+      createdAt: r['queuedAt']?.toString() ?? '',
+    );
   }
 
   List<DeathNotification> get _filtered {
@@ -86,10 +147,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     final canCreate = const [
       'medical_officer',
       'public_health_analyst',
-      'system_admin',
       'mortuary_clerk',
     ].contains(role);
-    final items = _filtered;
+    final items = [..._localPending, ..._filtered];
     final pending = _items.where((n) => n.status == 'pending_review').length;
     final underReview = _items.where((n) => n.status == 'under_review').length;
     final finalized = _items

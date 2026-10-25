@@ -8,6 +8,7 @@ import '../../data/auth_repository.dart';
 import '../../data/dds_repository.dart';
 import '../../data/draft_store.dart';
 import '../../data/models.dart';
+import '../../data/mutation_service.dart';
 import '../../ui/app_shell.dart';
 import '../../ui/theme.dart';
 import '../../ui/widgets.dart';
@@ -32,7 +33,6 @@ class _NotificationNewScreenState extends State<NotificationNewScreen> {
   ];
 
   final _drafts = DraftStore();
-  final _queue = OfflineQueue();
   int _step = 0;
   bool _submitting = false;
   bool _draftRestored = false;
@@ -43,9 +43,8 @@ class _NotificationNewScreenState extends State<NotificationNewScreen> {
   String age = '';
   String gender = '';
   String residentialAddress = '';
-  String latitude = '';
-  String longitude = '';
   String facilityId = '';
+  String linkedSignalId = '';
   String dateOfDeath = '';
   String icdCode = '';
   String icdDesc = '';
@@ -87,9 +86,8 @@ class _NotificationNewScreenState extends State<NotificationNewScreen> {
         age = draft['age'] ?? '';
         gender = draft['gender'] ?? '';
         residentialAddress = draft['residentialAddress'] ?? '';
-        latitude = draft['latitude'] ?? '';
-        longitude = draft['longitude'] ?? '';
         facilityId = draft['facilityId'] ?? '';
+        linkedSignalId = draft['linkedSignalId'] ?? '';
         dateOfDeath = draft['dateOfDeath'] ?? '';
         icdCode = draft['icdCode'] ?? '';
         icdDesc = draft['icdDesc'] ?? '';
@@ -110,9 +108,8 @@ class _NotificationNewScreenState extends State<NotificationNewScreen> {
     'age': age,
     'gender': gender,
     'residentialAddress': residentialAddress,
-    'latitude': latitude,
-    'longitude': longitude,
     'facilityId': facilityId,
+    'linkedSignalId': linkedSignalId,
     'dateOfDeath': dateOfDeath,
     'icdCode': icdCode,
     'icdDesc': icdDesc,
@@ -167,6 +164,11 @@ class _NotificationNewScreenState extends State<NotificationNewScreen> {
   Future<void> _submit() async {
     setState(() => _submitting = true);
     final user = context.read<AuthRepository>().user;
+    // Coordinates come from the selected facility's stored GPS fix — officers
+    // never type lat/lng (location = reporting facility).
+    final facility = _facilities
+        .where((f) => f.facilityId == facilityId)
+        .firstOrNull;
     final payload = {
       'submissionId': const Uuid().v4(),
       'patient': {
@@ -177,8 +179,8 @@ class _NotificationNewScreenState extends State<NotificationNewScreen> {
         'residentialAddress': residentialAddress.isEmpty
             ? null
             : residentialAddress,
-        'latitude': latitude.isEmpty ? null : double.tryParse(latitude),
-        'longitude': longitude.isEmpty ? null : double.tryParse(longitude),
+        'latitude': facility?.latitude,
+        'longitude': facility?.longitude,
       },
       'facilityId': facilityId,
       'dateOfDeath': dateOfDeath,
@@ -192,6 +194,16 @@ class _NotificationNewScreenState extends State<NotificationNewScreen> {
       final res = await context.read<DdsRepository>().createNotification(
         payload,
       );
+      // Best-effort back-link: this notification was created from a signal.
+      if (linkedSignalId.isNotEmpty && mounted) {
+        await context.read<MutationService>().http(
+          'PATCH',
+          '/signals/$linkedSignalId/workflow',
+          body: {'linkedNotificationId': res.notificationId},
+          entityType: 'signal',
+          entityId: linkedSignalId,
+        );
+      }
       await _drafts.clearDraft();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -210,8 +222,10 @@ class _NotificationNewScreenState extends State<NotificationNewScreen> {
       context.pushReplacement('/notifications/${res.notificationId}');
     } on ApiException catch (e) {
       if (e.status == 0) {
-        // Offline — queue locally (TC-05 parity)
-        await _queue.enqueueNotification(payload);
+        // Offline — queue locally (TC-05 parity). The op lands in
+        // offline_cases instantly, so the record is visible in the
+        // notifications list straight away with a pending marker.
+        await context.read<MutationService>().notification(payload);
         await _drafts.clearDraft();
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -380,29 +394,6 @@ class _NotificationNewScreenState extends State<NotificationNewScreen> {
           tr('Residential address'),
           (v) => residentialAddress = v,
           initial: residentialAddress,
-        ),
-        Row(
-          children: [
-            Expanded(
-              child: _field(
-                tr('Latitude (optional)'),
-                (v) => latitude = v,
-                initial: latitude,
-                hint: '-17.82',
-                numeric: true,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _field(
-                tr('Longitude (optional)'),
-                (v) => longitude = v,
-                initial: longitude,
-                hint: '31.05',
-                numeric: true,
-              ),
-            ),
-          ],
         ),
       ],
     ),

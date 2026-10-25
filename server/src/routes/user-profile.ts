@@ -95,7 +95,7 @@ userProfileRouter.post("/change-password", requireAuth, async (req, res) => {
   await query("UPDATE users SET password_hash = ?, failed_login_attempts = 0, profile_updated_at = ? WHERE user_id = ?", [hash, new Date(), req.user!.userId])
 
   // Revoke all other sessions
-  await query("UPDATE sessions SET revoked = 1 WHERE user_id = ? AND session_id <> ?", [
+  await query("UPDATE sessions SET revoked = true WHERE user_id = ? AND session_id <> ?", [
     req.user!.userId,
     req.user!.sessionId,
   ])
@@ -119,7 +119,7 @@ userProfileRouter.delete("/sessions/:id", requireAuth, async (req, res) => {
   if (req.params.id === req.user!.sessionId) {
     return res.status(400).json({ error: "Cannot revoke current session" })
   }
-  await query("UPDATE sessions SET revoked = 1 WHERE session_id = ? AND user_id = ?", [
+  await query("UPDATE sessions SET revoked = true WHERE session_id = ? AND user_id = ?", [
     req.params.id,
     req.user!.userId,
   ])
@@ -129,7 +129,7 @@ userProfileRouter.delete("/sessions/:id", requireAuth, async (req, res) => {
 
 // Revoke all other sessions
 userProfileRouter.delete("/sessions", requireAuth, async (req, res) => {
-  await query("UPDATE sessions SET revoked = 1 WHERE user_id = ? AND session_id <> ?", [
+  await query("UPDATE sessions SET revoked = true WHERE user_id = ? AND session_id <> ?", [
     req.user!.userId,
     req.user!.sessionId,
   ])
@@ -160,7 +160,7 @@ userProfileRouter.patch("/preferences", requireAuth, async (req, res) => {
   await query(
     `INSERT INTO user_preferences (preference_id, user_id, preference_key, preference_value, updated_at)
      VALUES (?, ?, ?, ?, ?)
-     ON DUPLICATE KEY UPDATE preference_value = VALUES(preference_value), updated_at = VALUES(updated_at)`,
+     ON CONFLICT (user_id, preference_key) DO UPDATE SET preference_value = EXCLUDED.preference_value, updated_at = EXCLUDED.updated_at`,
     [crypto.randomUUID(), req.user!.userId, key, JSON.stringify(value), new Date()],
   )
 

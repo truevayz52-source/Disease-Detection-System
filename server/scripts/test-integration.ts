@@ -1,4 +1,4 @@
-import mysql from "mysql2/promise"
+import pg from "pg"
 import { spawn } from "node:child_process"
 import { fileURLToPath } from "node:url"
 import assert from "node:assert/strict"
@@ -8,8 +8,12 @@ import { hashPassword } from "../src/auth/password.js"
 import { totp } from "../src/auth/totp.js"
 
 const directory=fileURLToPath(new URL("../",import.meta.url)), database=`dds_test_${Date.now()}`,port=4199
-const conn=await mysql.createConnection(config.mysql)
-const env={...process.env,MYSQL_DATABASE:database,PORT:String(port),CLIENT_ORIGIN:"http://localhost:5173",WHISPER_URL:"",WHO_CLIENT_ID:"",WHO_CLIENT_SECRET:"",SMTP_HOST:"",PASSWORD_RESET_WEBHOOK_URL:""}
+const ssl=config.databaseSsl?{rejectUnauthorized:false}:undefined
+const dbUrlFor=(name:string)=>{const u=new URL(config.databaseUrl);u.pathname=`/${name}`;return u.toString()}
+const admin=new pg.Client({connectionString:dbUrlFor("postgres"),ssl})
+await admin.connect()
+let conn:pg.Client|undefined
+const env={...process.env,DATABASE_URL:dbUrlFor(database),PORT:String(port),CLIENT_ORIGIN:"http://localhost:5173",WHISPER_URL:"",WHO_CLIENT_ID:"",WHO_CLIENT_SECRET:"",SMTP_HOST:"",PASSWORD_RESET_WEBHOOK_URL:""}
 let server:ReturnType<typeof spawn>|undefined,output="",passed=0
 function child(args:string[]){return spawn(process.execPath,["--import","tsx",...args],{cwd:directory,env,windowsHide:true,stdio:["ignore","pipe","pipe"]})}
 function run(args:string[]){return new Promise<void>((resolve,reject)=>{const p=child(args);let log="";p.stdout?.on("data",d=>log+=d);p.stderr?.on("data",d=>log+=d);p.on("error",reject);p.on("exit",code=>code===0?resolve():reject(Error(log)))})}
@@ -21,14 +25,15 @@ async function call(path:string,role?:string,body?:unknown,method=body?"POST":"G
 }
 function ok(name:string){passed++;console.log(`PASS ${name}`)}
 try{
-  await conn.query(`CREATE DATABASE ${database}`)
+  await admin.query(`CREATE DATABASE "${database}"`)
   await run(["scripts/migrate.ts"]);await run(["scripts/migrate.ts"]);ok("schema migration is repeatable")
-  await conn.changeUser({database})
+  conn=new pg.Client({connectionString:dbUrlFor(database),ssl})
+  await conn.connect()
   await conn.query("INSERT INTO facilities (facility_id,facility_name,province,district,latitude,longitude) VALUES ('test-facility','Test Facility','Test Province','Test District',-17,31),('other-facility','Other Facility','Other Province','Other District',-19,30)")
   await conn.query("INSERT INTO icd_codes (icd_code,description,disease_category) VALUES ('A00','Test code','Test category')")
   const roles=["medical_officer","pathologist","public_health_analyst","system_admin","mortuary_clerk","executive"]
   const password="TestPassword123",hash=await hashPassword(password)
-  for(const role of roles)await conn.query("INSERT INTO users (user_id,full_name,email,password_hash,role,facility_id) VALUES (?,?,?,?,?,?)",[role,role,`${role}@example.test`,hash,role,["medical_officer","mortuary_clerk"].includes(role)?"test-facility":null])
+  for(const role of roles)await conn.query("INSERT INTO users (user_id,full_name,email,password_hash,role,facility_id) VALUES ($1,$2,$3,$4,$5,$6)",[role,role,`${role}@example.test`,hash,role,["medical_officer","mortuary_clerk"].includes(role)?"test-facility":null])
   server=child(["src/index.ts"]);server.stdout?.on("data",d=>output+=d);server.stderr?.on("data",d=>output+=d)
   let ready=false
   for(let i=0;i<60;i++){try{await call("/health");ready=true;break}catch{await new Promise(r=>setTimeout(r,250))}}
@@ -49,7 +54,7 @@ try{
   const payload={submissionId:crypto.randomUUID(),patient:{fullName:"Integration Case",age:32,gender:"female"},facilityId:"other-facility",dateOfDeath:new Date().toISOString(),preliminaryIcdCode:"A00",isMaternalPerinatal:true}
   const first=await call("/notifications","medical_officer",payload,"POST",201),again=await call("/notifications","medical_officer",payload,"POST",201)
   assert.equal(first.notificationId,again.notificationId)
-  const [counts]=await conn.query<any[]>("SELECT COUNT(*) AS n FROM death_notifications");assert.equal(counts[0].n,1)
+  const {rows:counts}=await conn.query<any>("SELECT COUNT(*) AS n FROM death_notifications");assert.equal(Number(counts[0].n),1)
   const detail=await call(`/notifications/${first.notificationId}`,"medical_officer");assert.equal(detail.notification.facility_id,"test-facility")
   await call("/notifications","medical_officer",{...payload,patient:{...payload.patient,fullName:"Changed"}},"POST",409);ok("submissions are atomic, facility scoped and idempotent")
   const dup1=await call("/notifications","medical_officer",{...payload,submissionId:crypto.randomUUID(),isMaternalPerinatal:false,patient:{...payload.patient,nationalId:"63-TEST-DUP-1"}},"POST",201)
@@ -114,6 +119,7 @@ try{
 }catch(error){console.error(output.slice(-3000));throw error}
 finally{
   if(server&&!server.killed){server.kill();await new Promise(resolve=>server!.once("exit",resolve))}
-  if(/^dds_test_\d+$/.test(database))await conn.query(`DROP DATABASE IF EXISTS ${database}`)
-  await conn.end()
+  if(conn)await conn.end()
+  if(/^dds_test_\d+$/.test(database))await admin.query(`DROP DATABASE IF EXISTS "${database}" WITH (FORCE)`)
+  await admin.end()
 }

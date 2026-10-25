@@ -38,12 +38,3 @@ export async function aiExtract(text: string, opts: { pii?: PiiLiterals } = {}):
   })
   return (unmaskDeep(res.fields ?? {}, map) ?? {}) as Record<string, unknown>
 }
-
-/** Plain-language explanation of an outbreak alert from aggregates only. */
-export async function aiExplainAlert(context: Record<string, string | number | boolean>, lang?: string): Promise<string> {
-  const res = await api<{ explanation: string }>("/ai/explain", {
-    method: "POST",
-    body: JSON.stringify({ kind: "alert", context, lang }),
-  })
-  return res.explanation ?? ""
-}

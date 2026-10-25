@@ -49,8 +49,15 @@ class ServerResolver {
   static Future<String?> _fetchPointer() async {
     if (_lookupUrl.isEmpty) return null;
     try {
+      // Cache-bust — raw.githubusercontent.com caches for 5 min, which would
+      // keep serving the dead tunnel URL after a restart.
+      final sep = _lookupUrl.contains('?') ? '&' : '?';
       final res = await http
-          .get(Uri.parse(_lookupUrl))
+          .get(
+            Uri.parse(
+              '$_lookupUrl${sep}_cb=${DateTime.now().millisecondsSinceEpoch}',
+            ),
+          )
           .timeout(const Duration(seconds: 4));
       if (res.statusCode != 200) return null;
       final body = jsonDecode(res.body);
@@ -298,6 +305,10 @@ class ServerResolver {
 
   static Future<void> _markLastGood(String url) async =>
       (await SharedPreferences.getInstance()).setString(_lastGoodKey, url);
+
+  /// Persist a LAN-discovered URL as last-good without turning it into a
+  /// user override — the saved override always stays user-owned.
+  static Future<void> markLastGood(String url) => _markLastGood(url);
 
   /// Forget the last-good pointer — called when requests keep failing so the
   /// next resolve() tries the full candidate list again.

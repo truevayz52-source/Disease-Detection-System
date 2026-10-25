@@ -50,6 +50,13 @@ dependencies:
   flutter_secure_storage: ^11.2.0
   hive_flutter: ^1.1.0
   local_auth: ^3.0.2
+  flutter_map: ^8.3.2
+  latlong2: ^0.10.1
+  geolocator: ^14.0.1
+  record: ^7.1.1
+  file_picker: ^13.1.0
+  share_plus: ^13.3.1
+  workmanager: ^0.10.10
 
 flutter_launcher_icons:
   android: true
@@ -95,7 +102,11 @@ flutter:
   assets:
     - assets/mohcc-logo.png
     - assets/zimbabwe-coat-of-arms.png
-    - assets/lang/
+    - assets/lang/en.json
+    - assets/lang/sn.json
+    - assets/lang/nd.json
+    - assets/lang/languages.json
+    - assets/lang/medical-glossary.json
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

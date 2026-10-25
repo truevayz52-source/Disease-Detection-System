@@ -20,6 +20,7 @@ function fail(client: WebSocket, code: number, reason: string) {
 async function handle(client: WebSocket, url: URL, req: IncomingMessage) {
   const user = await validateSessionToken(url.searchParams.get("token") ?? "").catch(() => null)
   if (!user || !VOICE_ROLES.has(user.role)) return fail(client, 4401, "Unauthorized")
+  const authUser = user
 
   const notificationId = url.searchParams.get("notificationId") ?? ""
   const language = url.searchParams.get("language") ?? "en"
@@ -64,7 +65,7 @@ async function handle(client: WebSocket, url: URL, req: IncomingMessage) {
     if (audited) return
     audited = true
     await writeAudit(null, {
-      userId: user.user_id,
+      userId: authUser.user_id,
       action: "stream_transcribe",
       entityType: "death_notifications",
       entityId: notificationId,

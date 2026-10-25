@@ -7,6 +7,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../data/api_client.dart';
 import '../../data/dds_repository.dart';
+import '../../data/mutation_service.dart';
+import '../../data/read_cache.dart';
 import '../../data/sync_service.dart';
 import '../../ui/app_shell.dart';
 import '../../ui/server_settings.dart';
@@ -137,13 +139,25 @@ class _SystemSettingsScreenState extends State<SystemSettingsScreen> {
   Future<void> _saveNotice() async {
     setState(() => _saving = true);
     try {
-      await context.read<DdsRepository>().saveSetting(
-        'site_notice',
-        _notice.text,
+      // Settings changes queue like any other mutation.
+      final res = await context.read<MutationService>().http(
+        'PATCH',
+        '/settings/site_notice',
+        body: {'value': _notice.text},
+        entityType: 'setting',
+        entityId: 'site_notice',
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(tr('Setting saved'))));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            res.status == MutationStatus.queued
+                ? tr('Offline — setting queued for sync')
+                : tr('Setting saved'),
+          ),
+        ),
+      );
+      throwIfFailed(res);
       await _load();
     } catch (e) {
       if (!mounted) return;
@@ -179,14 +193,10 @@ class _SystemSettingsScreenState extends State<SystemSettingsScreen> {
       ),
     );
     if (ok != true) return;
-    final prefs = await SharedPreferences.getInstance();
-    for (final key in prefs.getKeys().toList()) {
-      if (key.startsWith('cache:') ||
-          key.startsWith('cache_ts:') ||
-          key == 'dds_last_live_get') {
-        await prefs.remove(key);
-      }
-    }
+    // The read cache now lives in the encrypted Hive `read_cache` box;
+    // ReadCache.clear() also sweeps legacy SharedPreferences entries.
+    await ReadCache().clear();
+    (await SharedPreferences.getInstance()).remove('dds_last_live_get');
     if (mounted) {
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text(tr('Cached data cleared'))));

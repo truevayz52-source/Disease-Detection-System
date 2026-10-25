@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../../data/auth_repository.dart';
 import '../../data/dds_repository.dart';
 import '../../data/models.dart';
+import '../../data/mutation_service.dart';
 import '../../ui/app_shell.dart';
 import '../../ui/theme.dart';
 import '../../ui/widgets.dart';
@@ -29,6 +30,9 @@ class _AlertsScreenState extends State<AlertsScreen> {
   String _status = 'all';
   String _type = 'all';
   final Set<String> _resolving = {};
+
+  /// Alerts resolved optimistically but not yet confirmed by the server.
+  final Set<String> _resolvedLocally = {};
 
   @override
   void initState() {
@@ -65,19 +69,37 @@ class _AlertsScreenState extends State<AlertsScreen> {
   }
 
   Future<void> _resolve(OutbreakAlert a) async {
-    setState(() => _resolving.add(a.alertId));
+    // Optimistic: flip the row to resolved instantly, then send/queue.
+    setState(() {
+      _resolving.add(a.alertId);
+      _resolvedLocally.add(a.alertId);
+    });
     try {
-      await context.read<DdsRepository>().resolveAlert(a.alertId);
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(tr('Alert resolved.'))));
+      final res = await context.read<MutationService>().http(
+        'PATCH',
+        '/alerts/${a.alertId}/resolve',
+        entityType: 'alert',
+        entityId: a.alertId,
+        overlay: {'status': 'resolved'},
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            res.status == MutationStatus.queued
+                ? tr('Offline — resolve queued and will sync on reconnect.')
+                : res.status == MutationStatus.synced
+                ? tr('Alert resolved.')
+                : res.error?.message ?? tr('Resolve failed'),
+          ),
+        ),
+      );
+      if (res.status == MutationStatus.rejected ||
+          res.status == MutationStatus.conflict) {
+        // Roll the optimistic marker back — the write didn't land.
+        setState(() => _resolvedLocally.remove(a.alertId));
       }
-      await _load();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('$e')));
-      }
+      if (res.status == MutationStatus.synced) await _load();
     } finally {
       if (mounted) setState(() => _resolving.remove(a.alertId));
     }
@@ -86,10 +108,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
   @override
   Widget build(BuildContext context) {
     final role = context.watch<AuthRepository>().user?.role;
-    final canResolve = const [
-      'public_health_analyst',
-      'system_admin',
-    ].contains(role);
+    final canResolve = const ['public_health_analyst'].contains(role);
 
     return AppScaffold(
       title: tr('Alerts'),
@@ -223,7 +242,12 @@ class _AlertsScreenState extends State<AlertsScreen> {
                     ),
                   ),
                 ),
-                StatusBadge(a.status),
+                if (_resolvedLocally.contains(a.alertId)) ...[
+                  const StatusBadge('resolved'),
+                  const SizedBox(width: 4),
+                  const StatusBadge('pending_sync'),
+                ] else
+                  StatusBadge(a.status),
                 const SizedBox(width: 6),
                 Container(
                   padding: const EdgeInsets.symmetric(
@@ -297,7 +321,9 @@ class _AlertsScreenState extends State<AlertsScreen> {
                   ),
                 ),
               ),
-            if (a.status == 'active' && canResolve)
+            if (a.status == 'active' &&
+                canResolve &&
+                !_resolvedLocally.contains(a.alertId))
               Align(
                 alignment: Alignment.centerRight,
                 child: TextButton.icon(

@@ -7,7 +7,7 @@ import { writeAudit } from "../lib/audit.js"
 export const decodePanelRouter = Router()
 
 // Create DeCoDe panel review
-decodePanelRouter.post("/", requireAuth, requireRole("pathologist", "system_admin"), async (req, res) => {
+decodePanelRouter.post("/", requireAuth, requireRole("pathologist"), async (req, res) => {
   const schema = z.object({
     notificationId: z.string(),
     panelMembers: z.array(z.string()), // User IDs
@@ -30,7 +30,7 @@ decodePanelRouter.post("/", requireAuth, requireRole("pathologist", "system_admi
 })
 
 // Submit consensus diagnosis
-decodePanelRouter.post("/:panelId/consensus", requireAuth, requireRole("pathologist", "system_admin"), async (req, res) => {
+decodePanelRouter.post("/:panelId/consensus", requireAuth, requireRole("pathologist"), async (req, res) => {
   const schema = z.object({
     consensusCause: z.string(),
   })
@@ -52,7 +52,7 @@ decodePanelRouter.post("/:panelId/consensus", requireAuth, requireRole("patholog
 })
 
 // Get panel details
-decodePanelRouter.get("/:panelId", requireAuth, requireRole("pathologist", "public_health_analyst", "system_admin"), async (req, res) => {
+decodePanelRouter.get("/:panelId", requireAuth, requireRole("pathologist", "public_health_analyst"), async (req, res) => {
   const panel = await query<any[]>(
     "SELECT * FROM decode_panels WHERE panel_id = ?",
     [req.params.panelId]

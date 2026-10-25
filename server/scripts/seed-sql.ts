@@ -1,0 +1,185 @@
+/**
+ * Generates supabase/seed.sql — the same demo data as seed.ts, but as plain SQL
+ * so it can be pasted into the Supabase dashboard SQL editor (or applied via
+ * `pnpm seed` once DATABASE_URL is available — seed.ts stays the live path).
+ *
+ * Run with: pnpm --filter server exec tsx scripts/seed-sql.ts
+ */
+import { writeFile } from "node:fs/promises"
+import { fileURLToPath } from "node:url"
+import path from "node:path"
+import { randomUUID } from "node:crypto"
+import { hashPassword } from "../src/auth/password.js"
+import { analyzeText } from "../src/lib/classifier.js"
+
+const FACILITIES = [
+  { name: "Harare Central Hospital", province: "Harare", district: "Harare", lat: -17.8292, lng: 31.0522, type: "central_hospital" },
+  { name: "Parirenyatwa Group of Hospitals", province: "Harare", district: "Harare", lat: -17.8146, lng: 31.0492, type: "central_hospital" },
+  { name: "Mpilo Central Hospital", province: "Bulawayo", district: "Bulawayo", lat: -20.15, lng: 28.5833, type: "central_hospital" },
+  { name: "Mutare Provincial Hospital", province: "Manicaland", district: "Mutare", lat: -18.9707, lng: 32.6709, type: "provincial_hospital" },
+  { name: "Gweru Provincial Hospital", province: "Midlands", district: "Gweru", lat: -19.45, lng: 29.8167, type: "provincial_hospital" },
+  { name: "Chinhoyi District Hospital", province: "Mashonaland West", district: "Chinhoyi", lat: -17.3667, lng: 30.2, type: "district_hospital" },
+]
+
+const ICD_CODES = [
+  { code: "A00", desc: "Cholera", category: "Infectious - Waterborne", notifiable: true },
+  { code: "A01", desc: "Typhoid and paratyphoid fevers", category: "Infectious - Waterborne", notifiable: true },
+  { code: "A90", desc: "Dengue fever", category: "Infectious - Vector-borne", notifiable: true },
+  { code: "A95", desc: "Yellow fever", category: "Infectious - Vector-borne", notifiable: true },
+  { code: "B50", desc: "Plasmodium falciparum malaria", category: "Infectious - Vector-borne", notifiable: true },
+  { code: "B54", desc: "Unspecified malaria", category: "Infectious - Vector-borne", notifiable: true },
+  { code: "A09", desc: "Diarrhoea and gastroenteritis of presumed infectious origin", category: "Infectious - Waterborne", notifiable: true },
+  { code: "U07.1", desc: "COVID-19", category: "Infectious - Respiratory", notifiable: true },
+  { code: "J18", desc: "Pneumonia, unspecified organism", category: "Respiratory", notifiable: false },
+  { code: "I21", desc: "Acute myocardial infarction", category: "Cardiovascular", notifiable: false },
+  { code: "O95", desc: "Obstetric death of unspecified cause", category: "Maternal", notifiable: true },
+  { code: "P95", desc: "Fetal death of unspecified cause", category: "Perinatal", notifiable: true },
+  { code: "X59", desc: "Exposure to unspecified factor / undetermined cause", category: "External / Undetermined", notifiable: false },
+  { code: "R99", desc: "Ill-defined and unspecified cause of mortality", category: "Ill-defined", notifiable: false },
+]
+
+const USERS = [
+  { name: "Dr. Tendai Moyo", email: "t.moyo@mohcc.org.zw", role: "medical_officer", facility: 0, phone: "+263-71-123-4567", department: "Emergency Department" },
+  { name: "Dr. Chipo Ndlovu", email: "c.ndlovu@mohcc.org.zw", role: "pathologist", facility: 1, phone: "+263-71-234-5678", department: "Pathology Department" },
+  { name: "Mrs. Rutendo Chikafu", email: "r.chikafu@mohcc.org.zw", role: "public_health_analyst", facility: null, phone: "+263-71-345-6789", department: "Epidemiology Unit" },
+  { name: "System Administrator", email: "sysadmin@mohcc.org.zw", role: "system_admin", facility: null, phone: "+263-71-456-7890", department: "IT Directorate" },
+  { name: "Tawanda Moyo", email: "t.moyo.clerk@mohcc.org.zw", role: "mortuary_clerk", facility: 0, phone: "+263-71-567-8901", department: "Records Office" },
+  { name: "Dr. Rumbidzai Chikwamba", email: "r.chikwamba@mohcc.org.zw", role: "executive", facility: null, phone: "+263-71-678-9012", department: "Executive Office" },
+]
+
+const DEMO_PASSWORD = "password123"
+const FIRST = ["Tapiwa", "Rudo", "Simba", "Chido", "Tatenda", "Nyasha", "Kudzai", "Farai", "Tinashe", "Rutendo", "Munyaradzi", "Paidamoyo"]
+const LAST = ["Moyo", "Ndlovu", "Chikafu", "Mukono", "Dube", "Sibanda", "Mawere", "Zvarevashe", "Gumbo", "Marowa", "Chirume", "Zhou"]
+
+function rand<T>(arr: T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)]
+}
+function sql(v: string | number | boolean | Date | null | undefined): string {
+  if (v === null || v === undefined) return "NULL"
+  if (typeof v === "number") return Number.isFinite(v) ? String(v) : "NULL"
+  if (typeof v === "boolean") return v ? "true" : "false"
+  if (v instanceof Date) return `'${v.toISOString()}'::timestamptz`
+  return `'${v.replace(/'/g, "''")}'`
+}
+function json(v: unknown): string {
+  return `'${JSON.stringify(v).replace(/'/g, "''")}'::jsonb`
+}
+
+async function main() {
+  const out: string[] = []
+  out.push("-- DDS seed data — generated by server/scripts/seed-sql.ts")
+  out.push("-- Safe to re-run: idempotent ON CONFLICT clauses / guarded inserts.")
+  out.push("-- Demo user password: password123")
+  out.push("BEGIN;")
+  out.push("")
+
+  out.push("-- Facilities")
+  const facilityIds = FACILITIES.map((_, i) => `00000000-0000-4000-8000-0000000000${String(i + 1).padStart(2, "0")}`)
+  for (const [i, f] of FACILITIES.entries()) {
+    out.push(`INSERT INTO facilities (facility_id, facility_name, province, district, latitude, longitude, facility_type)
+  VALUES (${sql(facilityIds[i])}, ${sql(f.name)}, ${sql(f.province)}, ${sql(f.district)}, ${sql(f.lat)}, ${sql(f.lng)}, ${sql(f.type)})
+  ON CONFLICT (facility_id) DO NOTHING;`)
+  }
+
+  out.push("")
+  out.push("-- ICD-10 reference codes")
+  for (const c of ICD_CODES) {
+    out.push(`INSERT INTO icd_codes (icd_code, icd_version, description, disease_category, is_notifiable)
+  VALUES (${sql(c.code)}, 'ICD-10', ${sql(c.desc)}, ${sql(c.category)}, ${c.notifiable})
+  ON CONFLICT (icd_code) DO UPDATE SET description = EXCLUDED.description, disease_category = EXCLUDED.disease_category, is_notifiable = EXCLUDED.is_notifiable;`)
+  }
+
+  out.push("")
+  out.push("-- Demo users (argon2 hash of 'password123')")
+  const hash = await hashPassword(DEMO_PASSWORD)
+  const userIds = USERS.map((_, i) => `00000000-0000-4000-8000-0000000001${String(i + 1).padStart(2, "0")}`)
+  for (const [i, u] of USERS.entries()) {
+    out.push(`INSERT INTO users (user_id, full_name, email, password_hash, role, facility_id, phone, department, language, timezone)
+  VALUES (${sql(userIds[i])}, ${sql(u.name)}, ${sql(u.email)}, ${sql(hash)}, ${sql(u.role)}, ${sql(u.facility !== null ? facilityIds[u.facility] : null)}, ${sql(u.phone)}, ${sql(u.department)}, 'en', 'Africa/Harare')
+  ON CONFLICT (email) DO UPDATE SET password_hash = EXCLUDED.password_hash, role = EXCLUDED.role, phone = EXCLUDED.phone, department = EXCLUDED.department;`)
+  }
+
+  const reporterEmail = "t.moyo@mohcc.org.zw"
+  const reporterId = `(SELECT user_id FROM users WHERE email = '${reporterEmail}')`
+
+  out.push("")
+  out.push("-- Demo patients + death notifications (~60 background + 2 MPDSR + 12-case cholera cluster)")
+  const nonCholera = ICD_CODES.filter((c) => c.code !== "A00")
+  function addCase(icdCode: string, facilityIdx: number, deathTime: Date, mpdsr = false) {
+    const pId = randomUUID()
+    const fac = FACILITIES[facilityIdx]
+    const jitter = () => (Math.random() - 0.5) * 0.08
+    const nationalId = `63-${Math.floor(100000 + Math.random() * 899999)}${String.fromCharCode(65 + Math.floor(Math.random() * 26))}${Math.floor(Math.random() * 90 + 10)}`
+    out.push(`INSERT INTO patients (patient_id, national_id, full_name, age, gender, residential_address, latitude, longitude)
+  VALUES (${sql(pId)}, ${sql(nationalId)}, ${sql(`${rand(FIRST)} ${rand(LAST)}`)}, ${sql(Math.floor(1 + Math.random() * 89))}, ${sql(rand(["male", "female"]))}, ${sql(`${Math.floor(Math.random() * 999)} ${rand(["Main", "Chitungwiza", "Mbare", "Highfield", "Borrowdale"])} St, ${fac.district}`)}, ${sql(fac.lat + jitter())}, ${sql(fac.lng + jitter())})
+  ON CONFLICT (patient_id) DO NOTHING;`)
+    out.push(`INSERT INTO death_notifications
+  (notification_id, patient_id, facility_id, date_of_death, preliminary_icd_code, clinical_summary, reported_by, status, is_maternal_perinatal)
+  VALUES (${sql(randomUUID())}, ${sql(pId)}, ${sql(facilityIds[facilityIdx])}, ${sql(deathTime)}, ${sql(icdCode)}, 'Demo record - clinical summary pending.', ${reporterId}, ${sql(rand(["pending_review", "under_review", "finalized"]))}, ${mpdsr})
+  ON CONFLICT (notification_id) DO NOTHING;`)
+  }
+  for (let i = 0; i < 60; i++) {
+    const daysAgo = Math.floor(Math.random() * 60)
+    addCase(rand(nonCholera).code, Math.floor(Math.random() * FACILITIES.length), new Date(Date.now() - daysAgo * 86400_000 - Math.random() * 86400_000))
+  }
+  addCase("O95", 0, new Date(Date.now() - 5 * 86400_000), true)
+  addCase("P95", 2, new Date(Date.now() - 12 * 86400_000), true)
+  // TC-04 cluster: 12 cholera cases across Harare facilities inside 48h.
+  for (let i = 0; i < 12; i++) {
+    addCase("A00", i % 2 === 0 ? 0 : 1, new Date(Date.now() - Math.random() * 40 * 3600_000))
+  }
+
+  out.push("")
+  out.push("-- Response playbooks")
+  const PLAYBOOKS = [
+    { name: "Suspicious death scene response", type: "suspicious_death", desc: "Secure the scene, notify police and the forensic pathologist, preserve evidence before body removal.", steps: ["Secure the scene and restrict access", "Notify the nearest police post", "Dispatch forensic team for scene examination", "Document the scene (photos, body position, witnesses)", "Arrange body removal to the mortuary", "Open a case investigation and link it to the signal"] },
+    { name: "MPDSR community verification", type: "maternal_perinatal", desc: "Verify a suspected maternal or perinatal death within 48 hours and open an MPDSR review.", steps: ["Contact the reporting source to confirm the death", "Verify pregnancy / perinatal status", "Create a death notification flagged maternal/perinatal", "Notify the district MPDSR committee", "Schedule a verbal autopsy / family interview"] },
+    { name: "Unreported death follow-up", type: "unreported_death", desc: "Trace community deaths that were never formally notified and complete registration.", steps: ["Visit the household or contact the informant", "Collect the deceased's identity details", "Create a death notification at the nearest facility", "Record cause of death via verbal autopsy if needed", "Close the signal once the notification is filed"] },
+  ]
+  for (const pb of PLAYBOOKS) {
+    out.push(`INSERT INTO response_playbooks (playbook_id, name, description, signal_type, steps, created_by)
+  VALUES (${sql(randomUUID())}, ${sql(pb.name)}, ${sql(pb.desc)}, ${sql(pb.type)}, ${json(pb.steps)}, ${reporterId})
+  ON CONFLICT (playbook_id) DO NOTHING;`)
+  }
+
+  out.push("")
+  out.push("-- Demo mortality signals")
+  const SIGNALS = [
+    { type: "unreported_death", title: "Elderly man died at home — never reported", channel: "vhw", district: "Harare", province: "Harare", severity: "medium", desc: "Village health worker reports an elderly man died at home last week; the death was never formally notified to a facility." },
+    { type: "suspicious_death", title: "Unattended body found near riverbank", channel: "police", district: "Chinhoyi", province: "Mashonaland West", severity: "critical", desc: "Police post reports an unidentified body found near the river; suspected foul play, scene secured." },
+    { type: "maternal_perinatal", title: "Woman died during home delivery", channel: "community", district: "Mutare", province: "Manicaland", severity: "high", desc: "Community member reports a woman died in labour at home; the delivery was unattended and the death unreported." },
+  ]
+  const slaFor = (type: string, severity: string) =>
+    severity === "critical" || type === "suspicious_death" ? 24 : type === "maternal_perinatal" ? 48 : 72
+  for (const s of SIGNALS) {
+    const id = randomUUID()
+    const analysis = analyzeText(`${s.title} ${s.desc}`)
+    out.push(`INSERT INTO health_signals
+  (signal_id, signal_type, title, description, source_channel, district, province, severity, reported_by, sla_due_at, risk_score, classified_topics, sentiment, classified_drivers)
+  VALUES (${sql(id)}, ${sql(s.type)}, ${sql(s.title)}, ${sql(s.desc)}, ${sql(s.channel)}, ${sql(s.district)}, ${sql(s.province)}, ${sql(s.severity)}, ${reporterId}, now() + interval '${slaFor(s.type, s.severity)} hours', ${sql(analysis.riskScore)}, ${sql(analysis.topics.join(","))}, ${sql(analysis.sentiment)}, ${sql(analysis.drivers.join(","))})
+  ON CONFLICT (signal_id) DO NOTHING;`)
+    out.push(`INSERT INTO signal_workflow_events (event_id, signal_id, to_stage, to_status, actor_id, actor_name, notes)
+  VALUES (${sql(randomUUID())}, ${sql(id)}, 'captured', 'new', ${reporterId}, 'Seed', 'Signal captured')
+  ON CONFLICT (event_id) DO NOTHING;`)
+  }
+
+  out.push("")
+  out.push("-- Outbreak alert for the seeded cholera cluster (what detectOutbreaks() would create)")
+  out.push(`INSERT INTO outbreak_alerts
+  (alert_id, disease_category, district, cluster_data, case_count, risk_score, alert_type, dispatched_channels)
+  SELECT ${sql(randomUUID())}, 'Infectious - Waterborne', 'Harare', ${json({ window_hours: 48, detection: "seed", note: "12-case cholera cluster seeded for TC-04" })}, 12, 100, 'outbreak', 'dashboard,audit-log'
+  WHERE NOT EXISTS (SELECT 1 FROM outbreak_alerts WHERE status = 'active' AND district = 'Harare' AND disease_category = 'Infectious - Waterborne' AND alert_type = 'outbreak');`)
+
+  out.push("")
+  out.push("COMMIT;")
+
+  const file = path.resolve(fileURLToPath(new URL("../../supabase/seed.sql", import.meta.url)))
+  await writeFile(file, out.join("\n"))
+  console.log(`Wrote ${file} (${out.length} statements)`)
+  process.exit(0)
+}
+
+main().catch((err) => {
+  console.error(err)
+  process.exit(1)
+})

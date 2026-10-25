@@ -58,7 +58,9 @@ class AppLocalizations {
                 _bundled[code] = const {};
               }
             })
-            .catchError((_) => _bundled[code] = const {}),
+            .catchError((_) {
+              _bundled[code] = const {};
+            }),
       ),
     );
     for (final code in codes) {

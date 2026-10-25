@@ -20,6 +20,7 @@ import { detectOutbreaks } from "./lib/outbreak.js"
 import helmet from "helmet"
 import cors from "cors"
 import compression from "compression"
+import { rateLimiter } from "./auth/middleware.js"
 import { config } from "./config.js"
 import { startDiscoveryBeacon } from "./lib/discovery-beacon.js"
 import { authRouter } from "./routes/auth.js"
@@ -30,7 +31,7 @@ import { notificationsRouter } from "./routes/notifications.js"
 import { imagesRouter } from "./routes/images.js"
 import { autopsiesRouter } from "./routes/autopsies.js"
 import { alertsRouter } from "./routes/alerts.js"
-import { analyticsRouter } from "./routes/analytics.js"
+import { analyticsRouter, getDashboardData } from "./routes/analytics.js"
 import { usersRouter } from "./routes/users.js"
 import { auditRouter } from "./routes/audit.js"
 import { certificatesRouter } from "./routes/certificates.js"
@@ -40,7 +41,7 @@ import { emergencyDispatchRouter } from "./routes/emergency-dispatch.js"
 import { bulletinRouter } from "./routes/bulletins.js"
 import { causalChainRouter } from "./routes/causal-chain.js"
 import { dualCodingRouter } from "./routes/dual-coding.js"
-import { mpdsrTrackerRouter } from "./routes/mpdsr-tracker.js"
+
 import { verbalAutopsyRouter } from "./routes/verbal-autopsy.js"
 import { decodePanelRouter } from "./routes/decode-panel.js"
 import { imageAnnotationRouter } from "./routes/image-annotations.js"
@@ -62,6 +63,10 @@ import { aiRouter } from "./routes/ai.js"
 const app = express()
 
 app.disable("x-powered-by")
+// One trusted hop (Caddy/nginx): rate limiting and logs see the real client
+// IP instead of the proxy's. Only behind a reverse proxy — direct exposure
+// would let clients spoof X-Forwarded-For.
+if (process.env.NODE_ENV === "production") app.set("trust proxy", 1)
 app.use(helmet({ contentSecurityPolicy: false })) // API-only; CSP handled by the SPA host
 app.use(compression()) // gzip responses — low-bandwidth mobile clients
 app.use(cors({ origin: config.clientOrigin, credentials: true }))
@@ -69,7 +74,18 @@ app.use(express.json({ limit: "2mb" }))
 
 app.get("/api/health", (_req, res) => res.json({ status: "ok", service: "Disease Detection System" }))
 
-app.use("/api", (_req,res,next) => { res.setHeader("Cache-Control","no-store"); next() })
+app.use("/api", (req,res,next) => {
+  const start = Date.now()
+  res.setHeader("Cache-Control","no-store")
+  // Failure access log — 4xx/5xx responses are recorded so broken endpoints
+  // can't fail silently; routine 2xx traffic stays quiet.
+  res.on("finish", () => {
+    if (res.statusCode >= 400) console.warn(`[api] ${req.method} ${req.originalUrl} -> ${res.statusCode} (${Date.now() - start}ms)`)
+  })
+  next()
+})
+// Global ceiling per IP — per-route limiters stay tighter on auth/reset/AI.
+app.use("/api", rateLimiter(600, 60_000))
 app.use("/api/user", passwordResetRouter)
 app.use("/api/user", userProfileRouter)
 app.use("/api/user", twoFactorRouter)
@@ -84,7 +100,6 @@ app.use("/api/emergency", emergencyDispatchRouter)
 app.use("/api/bulletins", bulletinRouter)
 app.use("/api/causal-chain", causalChainRouter)
 app.use("/api/dual-coding", dualCodingRouter)
-app.use("/api/mpdsr", mpdsrTrackerRouter)
 app.use("/api/verbal-autopsy", verbalAutopsyRouter)
 app.use("/api/decode-panel", decodePanelRouter)
 app.use("/api/image-annotations", imageAnnotationRouter)
@@ -170,4 +185,13 @@ runOutbreakDetection()
 server.listen(config.port, () => {
   console.log(`[Disease Detection System] API listening on http://127.0.0.1:${config.port}`)
   startDiscoveryBeacon(config.port)
+  // Warm the dashboard cache so the first user request is sub-second.
+  setTimeout(() => {
+    void getDashboardData()
+      .then(() => console.log("[warmup] dashboard cache ready"))
+      .catch((err) => console.error("[warmup] dashboard cache failed:", err?.message ?? err))
+  }, 1000)
 })
+
+
+

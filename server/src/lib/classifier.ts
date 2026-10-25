@@ -1,24 +1,27 @@
 /**
- * Port of the BIIMZim rules-based signal classifier
- * (backend/biim-platform/ai_adapter/app/classifier.py) — pure keyword rules,
- * no external AI service. Same scoring formula and dictionaries.
+ * Mortality-domain signal classifier — keyword rules scoring community death
+ * signals (unreported, suspicious, maternal/perinatal, clusters) for the
+ * forensic mortality surveillance pipeline. No external AI service.
  */
 
 const KEYWORDS: Record<string, string[]> = {
-  vaccine_confidence: ["vaccine", "vaccination", "aefi", "immunization"],
-  service_delivery: ["clinic", "nurse", "medicine", "payment", "fee", "waiting"],
-  cholera: ["cholera", "diarrhoea", "diarrhea", "water"],
-  ebola: ["ebola", "burial", "isolation"],
+  injury_trauma: ["accident", "assault", "stab", "gunshot", "shot", "road traffic", "hit by", "run over", "fall", "fracture", "beaten", "attacked", "crush"],
+  drowning: ["drown", "river", "dam", "swim", "flood", "well"],
+  burns: ["burn", "fire", "scald"],
+  poisoning: ["poison", "overdose", "pesticide", "ingested", "toxic", "chemical"],
+  maternal: ["pregnant", "pregnancy", "childbirth", "delivery", "labour", "labor", "maternal", "postpartum", "antenatal"],
+  neonatal: ["newborn", "neonate", "neonatal", "infant", "baby", "stillbirth", "stillborn"],
+  sudden_unexplained: ["collapsed", "sudden", "unexplained", "found dead", "died in his sleep", "died in her sleep", "unattended"],
+  outbreak_related: ["cholera", "diarrhoea", "diarrhea", "dysentery", "typhoid", "measles", "meningitis", "cluster"],
 }
 
 const DRIVERS: Record<string, string[]> = {
-  fear: ["fear", "afraid", "worried", "unsafe", "danger"],
-  mistrust: ["trust", "mistrust", "government", "hide", "secret"],
-  access_barrier: ["far", "transport", "closed", "distance", "access"],
-  cost: ["fee", "payment", "cost", "money"],
-  quality_of_care: ["rude", "waiting", "stockout", "medicine", "quality"],
-  misinformation: ["rumour", "rumor", "false", "heard", "claim"],
-  safety_concerns: ["infertility", "death", "side effect", "harm"],
+  concealment: ["hidden", "conceal", "unreported", "buried", "secret", "cover up", "cover-up", "not reported"],
+  violence: ["murder", "killed", "beaten", "stabbed", "assault", "domestic", "abuse", "foul play"],
+  fear: ["fear", "afraid", "worried", "scared", "panic"],
+  reporting_delay: ["days ago", "weeks ago", "last week", "last month", "long ago", "delayed", "never reported"],
+  access_barrier: ["far", "transport", "distance", "remote", "no clinic", "no mortuary"],
+  misinformation: ["rumour", "rumor", "false", "claimed", "alleged", "unconfirmed", "heard"],
 }
 
 export interface SignalAnalysis {
@@ -38,7 +41,7 @@ export function classifyTopics(text: string): string[] {
   const matches = Object.entries(KEYWORDS)
     .filter(([, words]) => words.some((w) => text.includes(w)))
     .map(([topic]) => topic)
-  return matches.length ? matches : ["general_biim_signal"]
+  return matches.length ? matches : ["general_mortality_signal"]
 }
 
 export function classifyDrivers(text: string): string[] {
@@ -49,8 +52,8 @@ export function classifyDrivers(text: string): string[] {
 }
 
 export function sentiment(text: string): SignalAnalysis["sentiment"] {
-  const negative = ["fear", "worried", "unsafe", "death", "complaint", "mistrust", "infertility"]
-  const positive = ["resolved", "trusted", "safe", "improved"]
+  const negative = ["death", "died", "dead", "killed", "fear", "afraid", "hidden", "assault", "collapsed", "suspicious", "body", "corpse"]
+  const positive = ["safe", "recovered", "resolved", "confirmed alive", "false alarm"]
   if (negative.some((w) => text.includes(w))) return "negative"
   if (positive.some((w) => text.includes(w))) return "positive"
   return "neutral"
@@ -58,23 +61,23 @@ export function sentiment(text: string): SignalAnalysis["sentiment"] {
 
 export function riskScore(topics: string[], drivers: string[], text: string): number {
   let score = 20
-  if (topics.includes("vaccine_confidence")) score += 15
-  if (topics.includes("cholera") || topics.includes("ebola")) score += 15
+  if (topics.includes("maternal") || topics.includes("neonatal")) score += 15
+  if (topics.includes("injury_trauma") || drivers.includes("violence")) score += 15
+  if (topics.includes("outbreak_related")) score += 10
   score += 10 * drivers.filter((d) => d !== "unknown").length
-  if (["death", "infertility", "cross-border", "border"].some((t) => text.includes(t))) score += 15
+  if (["found dead", "unattended", "suspicious", "concealed", "bodies"].some((t) => text.includes(t))) score += 15
   return Math.min(score, 100)
 }
 
 export function recommendedResponses(topics: string[], drivers: string[]): string[] {
   const responses: string[] = []
-  if (drivers.includes("misinformation") || topics.includes("vaccine_confidence")) {
-    responses.push("trusted_health_worker_dialogue", "myth_busting_brief")
+  if (topics.includes("maternal") || topics.includes("neonatal")) responses.push("mpdsr_review")
+  if (drivers.includes("violence") || topics.includes("injury_trauma") || topics.includes("sudden_unexplained")) {
+    responses.push("dispatch_forensic_team", "police_referral")
   }
-  if (topics.includes("service_delivery") || drivers.includes("quality_of_care")) {
-    responses.push("service_correction_follow_up")
-  }
-  if (drivers.includes("mistrust")) responses.push("community_leader_engagement")
-  return responses.length ? responses : ["monitor_and_verify"]
+  if (topics.includes("outbreak_related")) responses.push("outbreak_investigation")
+  if (drivers.includes("concealment") || drivers.includes("reporting_delay")) responses.push("community_verification")
+  return responses.length ? responses : ["verify_death_notification"]
 }
 
 export function analyzeText(raw: string): SignalAnalysis {

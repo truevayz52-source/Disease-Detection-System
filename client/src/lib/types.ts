@@ -1,6 +1,7 @@
 export interface Facility {
   facility_id: string
   facility_name: string
+  facility_code?: string | null
   province: string
   district: string
   latitude: number
@@ -35,10 +36,17 @@ export interface DeathNotification {
   icd_description: string
   disease_category: string
   clinical_summary: string | null
-  status: "pending_review" | "under_review" | "autopsy_complete" | "finalized"
+  status: "pending_review" | "under_review" | "autopsy_complete" | "certified" | "finalized" | "rejected"
   is_maternal_perinatal: number
   reported_by_name: string
   created_at: string
+  rejection_reason: string | null
+  rejected_by: string | null
+  rejected_at: string | null
+  assigned_to: string | null
+  assignee_name: string | null
+  review_due_at: string | null
+  overdue: boolean
 }
 
 export interface TelepathologyImage {
@@ -63,12 +71,27 @@ export interface AutopsyReport {
   final_icd_code: string | null
   final_cause_of_death: string | null
   digital_signature?: string | null
+  signature_hmac?: string | null
   finalized_at: string | null
   created_at?: string
   pathologist_name?: string
   patient_name?: string
   facility_name?: string
   district?: string
+}
+
+export interface MedicalCertification {
+  certification_id: string
+  notification_id: string
+  certified_by: string
+  certified_by_name: string
+  final_icd_code: string
+  final_cause_of_death: string
+  manner_of_death: "natural" | "accident" | "suicide" | "homicide" | "undetermined"
+  signer_name: string
+  signature_hmac: string
+  audit_hash: string
+  created_at: string
 }
 
 export interface OutbreakAlert {
@@ -78,7 +101,7 @@ export interface OutbreakAlert {
   cluster_data: string | null
   case_count: number
   risk_score: number
-  alert_type: "outbreak" | "mpdsr"
+  alert_type: "outbreak" | "mpdsr" | "early_warning"
   triggered_date: string
   status: "active" | "resolved"
   dispatched_channels: string | null

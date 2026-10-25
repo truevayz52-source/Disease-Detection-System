@@ -54,7 +54,7 @@ const extractSchema = z.object({
 aiRouter.post(
   "/extract",
   requireAuth,
-  requireRole("medical_officer", "mortuary_clerk", "pathologist", "public_health_analyst", "system_admin"),
+  requireRole("medical_officer", "mortuary_clerk", "pathologist", "public_health_analyst"),
   rateLimiter(30),
   async (req, res) => {
     const parsed = extractSchema.safeParse(req.body)
@@ -96,7 +96,7 @@ const explainSchema = z.object({
 aiRouter.post(
   "/explain",
   requireAuth,
-  requireRole("medical_officer", "pathologist", "public_health_analyst", "system_admin", "executive"),
+  requireRole("medical_officer", "pathologist", "public_health_analyst", "executive"),
   rateLimiter(30),
   async (req, res) => {
     const parsed = explainSchema.safeParse(req.body)

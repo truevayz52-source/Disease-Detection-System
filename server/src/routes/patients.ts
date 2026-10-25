@@ -5,7 +5,7 @@ import { newId, query } from "../db.js"
 
 export const patientsRouter = Router()
 
-patientsRouter.get("/", requireAuth, requireRole("public_health_analyst", "pathologist", "system_admin"), async (req, res) => {
+patientsRouter.get("/", requireAuth, requireRole("public_health_analyst", "pathologist"), async (req, res) => {
   const q = String(req.query.q ?? "").trim()
   const like = `%${q}%`
   const page = Math.max(1, Number(req.query.page) || 1)

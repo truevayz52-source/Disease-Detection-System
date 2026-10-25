@@ -4,7 +4,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
 import 'local_store.dart';
-import '../l10n/app_localizations.dart';
+import 'sync_ops.dart';
+
+/// Backwards-compat alias — queued mutations are now [QueuedOp] (v2).
+typedef QueuedItem = QueuedOp;
 
 /// Mirrors client/src/lib/offline-queue.ts — autosaves the notification draft
 /// locally and queues submissions that fail while offline for replay on
@@ -37,94 +40,94 @@ class DraftStore {
   Future<void> clearDraft() => LocalStore.delete(_box, _draftId);
 }
 
-/// A queued offline mutation. [type] is 'notification' or 'image'.
-class QueuedItem {
-  final String id;
-  final String type;
-  final Map<String, dynamic> data;
-  final DateTime queuedAt;
-
-  const QueuedItem({
-    required this.id,
-    required this.type,
-    required this.data,
-    required this.queuedAt,
-  });
-
-  factory QueuedItem.fromJson(Map<String, dynamic> j) => QueuedItem(
-    id: j['id'] as String,
-    type: j['type'] as String,
-    data: (j['data'] as Map).cast<String, dynamic>(),
-    queuedAt:
-        DateTime.tryParse(j['queuedAt']?.toString() ?? '') ?? DateTime.now(),
-  );
-
-  Map<String, dynamic> toJson() => {
-    'id': id,
-    'type': type,
-    'data': data,
-    'queuedAt': queuedAt.toIso8601String(),
-  };
-
-  /// Short human summary for the Offline Sync screen.
-  String describe() => switch (type) {
-    'notification' => tr('Death notification — {name}', {
-      'name': data['patient']?['fullName'] ?? tr('unknown patient'),
-    }),
-    'image' => tr('Pathology image → case {id}', {
-      'id': data['notificationId'] ?? '?',
-    }),
-    _ => type,
-  };
-}
-
 /// Persistent FIFO queue of mutations made while offline (TC-05 parity),
-/// backed by the encrypted Hive `sync_queue` box. Queued notifications also
-/// leave a case record in `offline_cases` so field staff can review locally
-/// captured reports before they sync.
+/// backed by the encrypted Hive `sync_queue` box.
+///
+/// v2 ops ([QueuedOp]) cover every mutation kind: notification creates
+/// (replayed through the batch `/offline/sync` endpoint), generic JSON
+/// mutations (replayed through their canonical REST path) and multipart
+/// uploads. Ops that set state on the same entity carry a `coalesceKey` —
+/// enqueueing the newer one drops the older (client-side last-write-wins).
+///
+/// Queued ops also leave a case record in `offline_cases` so field staff can
+/// review locally captured reports before they sync.
 class OfflineQueue {
   static const _box = 'sync_queue';
   static const _legacyKey = 'dds_offline_queue';
   static const _uuid = Uuid();
 
-  Future<List<QueuedItem>> entries() async {
+  Future<List<QueuedOp>> entries() async {
     await _migrateLegacy();
-    final items = <QueuedItem>[];
+    final items = <QueuedOp>[];
     for (final id in await LocalStore.order(_box)) {
       final raw = await LocalStore.get(_box, id);
-      if (raw != null) items.add(QueuedItem.fromJson(raw));
+      if (raw == null) continue;
+      final op = QueuedOp.fromJson(raw);
+      // Rewrite v1 entries in v2 shape on read so the store converges.
+      if (raw['v'] != 2) await LocalStore.put(_box, id, op.toJson());
+      items.add(op);
     }
     return items;
   }
 
-  Future<QueuedItem> enqueueNotification(Map<String, dynamic> payload) async {
-    final item = await _add(
-      QueuedItem(
+  Future<QueuedOp> enqueueNotification(Map<String, dynamic> payload) async {
+    final op = await enqueueOp(
+      QueuedOp.notification(
         id: _uuid.v4(),
-        type: 'notification',
-        data: payload,
+        payload: payload,
         queuedAt: DateTime.now(),
       ),
     );
-    await OfflineCaseStore.record(item);
-    return item;
+    return op;
   }
 
-  Future<QueuedItem> enqueueImage(String notificationId, String filePath) =>
-      _add(
-        QueuedItem(
+  Future<QueuedOp> enqueueImage(String notificationId, String filePath) =>
+      enqueueOp(
+        QueuedOp.multipart(
           id: _uuid.v4(),
-          type: 'image',
-          data: {'notificationId': notificationId, 'filePath': filePath},
+          path: '/notifications/$notificationId/images',
+          filePath: filePath,
+          entityType: 'death_notification',
+          entityId: notificationId,
           queuedAt: DateTime.now(),
         ),
       );
 
-  Future<QueuedItem> _add(QueuedItem item) async {
+  /// Enqueue [op], dropping any still-pending op with the same coalesce key
+  /// (the newer write wins) and recording an `offline_cases` shadow row.
+  Future<QueuedOp> enqueueOp(QueuedOp op) async {
     await _migrateLegacy();
-    await LocalStore.put(_box, item.id, item.toJson());
-    await LocalStore.enqueue(_box, item.id);
-    return item;
+    final key = op.effectiveCoalesceKey;
+    if (key != null) {
+      for (final existing in await entries()) {
+        if (existing.effectiveCoalesceKey == key &&
+            existing.clientUpdatedAt.isBefore(op.clientUpdatedAt)) {
+          await remove(existing.id);
+        }
+      }
+    }
+    await LocalStore.put(_box, op.id, op.toJson());
+    await LocalStore.enqueue(_box, op.id);
+    await OfflineCaseStore.record(op);
+    return op;
+  }
+
+  /// Record a failed replay attempt (attempt count + error kept for the
+  /// Offline Sync screen and for per-op backoff).
+  Future<void> markAttempt(String id, String error) async {
+    final raw = await LocalStore.get(_box, id);
+    if (raw == null) return;
+    final op = QueuedOp.fromJson(raw);
+    await LocalStore.put(
+      _box,
+      id,
+      op.copyWith(attempts: op.attempts + 1, lastError: error).toJson(),
+    );
+  }
+
+  Future<QueuedOp?> get(String id) async {
+    final raw = await LocalStore.get(_box, id);
+    return raw == null ? null : QueuedOp.fromJson(raw);
   }
 
   Future<void> remove(String id) async {
@@ -145,12 +148,12 @@ class OfflineQueue {
     if (list == null || list.isEmpty) return;
     for (final s in list) {
       try {
-        final item = QueuedItem.fromJson(
+        final op = QueuedOp.fromJson(
           (jsonDecode(s) as Map).cast<String, dynamic>(),
         );
-        if (await LocalStore.get(_box, item.id) == null) {
-          await LocalStore.put(_box, item.id, item.toJson());
-          await LocalStore.enqueue(_box, item.id);
+        if (await LocalStore.get(_box, op.id) == null) {
+          await LocalStore.put(_box, op.id, op.toJson());
+          await LocalStore.enqueue(_box, op.id);
         }
       } catch (_) {
         /* skip malformed entry */
@@ -162,32 +165,54 @@ class OfflineQueue {
 
 /// Locally captured case records in the encrypted `offline_cases` box —
 /// the "offline medical forms" store. Each record mirrors a queued mutation
-/// and carries a `sync_status` updated by SyncService on replay.
+/// and carries a `sync_status` updated by the sync engine on replay:
+/// PENDING → SYNCED, REJECTED (server refused) or CONFLICT (a newer server
+/// write won under last-write-wins).
 class OfflineCaseStore {
   static const _box = 'offline_cases';
 
   /// Record a queued mutation as a pending local case.
-  static Future<void> record(QueuedItem item) => LocalStore.put(_box, item.id, {
-    'local_id': item.id,
-    'type': item.type,
-    'data': item.data,
-    'queuedAt': item.queuedAt.toIso8601String(),
+  static Future<void> record(QueuedOp op) => LocalStore.put(_box, op.id, {
+    'local_id': op.id,
+    'kind': op.kind,
+    'entityType': op.entityType,
+    'entityId': op.entityId,
+    'path': op.path,
+    'method': op.method,
+    'data': op.body,
+    'filePath': op.filePath,
+    'clientUpdatedAt': op.clientUpdatedAt.toIso8601String(),
+    'queuedAt': op.queuedAt.toIso8601String(),
     'sync_status': 'PENDING',
   });
 
   /// Update a record's outcome: 'SYNCED' after a successful replay,
-  /// 'REJECTED' when the server refused it (kept for audit).
-  static Future<void> markStatus(String localId, String status) async {
+  /// 'REJECTED' when the server refused it, 'CONFLICT' when a newer server
+  /// write won. Rejected/conflict records are kept for audit.
+  static Future<void> markStatus(
+    String localId,
+    String status, {
+    String? error,
+    String? serverUpdatedAt,
+  }) async {
     final record = await LocalStore.get(_box, localId);
     if (record == null) return;
     record['sync_status'] = status;
     record['resolvedAt'] = DateTime.now().toIso8601String();
+    if (error != null) record['lastError'] = error;
+    if (serverUpdatedAt != null) record['serverUpdatedAt'] = serverUpdatedAt;
     await LocalStore.put(_box, localId, record);
   }
 
   /// All locally stored reports, oldest first.
   static Future<List<Map<String, dynamic>>> localReports() async =>
       await LocalStore.values(_box);
+
+  /// Records still awaiting replay.
+  static Future<List<Map<String, dynamic>>> pending() async =>
+      (await localReports())
+          .where((r) => r['sync_status'] == 'PENDING')
+          .toList();
 
   static Future<void> clear() => LocalStore.clear(_box);
 }

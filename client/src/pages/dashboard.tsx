@@ -67,7 +67,7 @@ export default function DashboardPage() {const{t}=usePreferences();
   ]
 
   const categoryTotal = data?.byCategory.reduce((a, c) => a + c.count, 0) ?? 0
-  const canCreate = user && ["medical_officer", "public_health_analyst", "system_admin"].includes(user.role)
+  const canCreate = user && ["medical_officer", "public_health_analyst"].includes(user.role)
 
   return (
     <>

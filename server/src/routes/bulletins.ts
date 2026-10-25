@@ -7,7 +7,7 @@ import { writeAudit } from "../lib/audit.js"
 export const bulletinRouter = Router()
 
 // Generate automated epidemiological bulletin
-bulletinRouter.post("/generate", requireAuth, requireRole("public_health_analyst", "system_admin"), async (req, res) => {
+bulletinRouter.post("/generate", requireAuth, requireRole("public_health_analyst"), async (req, res) => {
   const schema = z.object({
     type: z.enum(["daily", "weekly", "monthly"]),
     district: z.string().optional(),
@@ -36,7 +36,8 @@ bulletinRouter.post("/generate", requireAuth, requireRole("public_health_analyst
      JOIN patients p ON p.patient_id = dn.patient_id
      JOIN facilities f ON f.facility_id = dn.facility_id
      JOIN icd_codes ic ON ic.icd_code = dn.preliminary_icd_code
-     WHERE ${district ? 'f.district = ?' : '1=1'}
+     WHERE dn.status <> 'rejected'
+     ${district ? 'AND f.district = ?' : ''}
      ${startDate ? 'AND dn.date_of_death >= ?' : ''}
      ${endDate ? 'AND dn.date_of_death <= ?' : ''}
      ORDER BY dn.date_of_death DESC`,
@@ -47,7 +48,7 @@ bulletinRouter.post("/generate", requireAuth, requireRole("public_health_analyst
   const alerts = await query<any[]>(
     `SELECT * FROM outbreak_alerts
      WHERE ${district ? 'district = ?' : '1=1'}
-     AND triggered_date >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
+     AND triggered_date >= CURRENT_DATE - INTERVAL '7 days'
      ORDER BY triggered_date DESC`,
     district ? [district] : []
   )
@@ -92,7 +93,7 @@ bulletinRouter.post("/generate", requireAuth, requireRole("public_health_analyst
 })
 
 // Get saved bulletins
-bulletinRouter.get("/saved", requireAuth, requireRole("public_health_analyst", "system_admin", "executive"), async (req, res) => {
+bulletinRouter.get("/saved", requireAuth, requireRole("public_health_analyst", "executive"), async (req, res) => {
   const bulletins = await query<any[]>(
     `SELECT report_id, report_name, report_type, schedule_config, last_run_at, created_at
      FROM scheduled_reports

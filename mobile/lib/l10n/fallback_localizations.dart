@@ -4,16 +4,15 @@ import 'package:flutter/material.dart';
 
 /// Fallback localizations for languages Flutter doesn't ship resources for.
 ///
-/// Most of the 16 official Zimbabwean languages (nd, sbn, kck, huc, nmq,
-/// ndc, toi, ts, ve, zsl — and in this SDK even sn) have no Material,
+/// isiNdebele (nd — and in this SDK even chiShona) has no Material,
 /// Cupertino or Widgets translations. Without these delegates, switching to
-/// one of those locales leaves `MaterialLocalizations`/`WidgetsLocalizations`
+/// that locale leaves `MaterialLocalizations`/`WidgetsLocalizations`
 /// absent and every Scaffold/Drawer/Tooltip throws "No MaterialLocalizations
 /// found".
 ///
 /// Each delegate serves the built-in English implementation for ANY locale.
 /// In `localizationsDelegates` they must come BEFORE the Global* delegates:
-/// where a real translation exists (en, ny, st, xh, …) the Global delegate
+/// where a real translation exists the Global delegate
 /// wins because later entries override earlier ones per resource type.
 
 class _FallbackMaterialLocalizationsDelegate

@@ -15,6 +15,7 @@ const SecurityPage = lazy(() => import("@/pages/operations").then(m => ({default
 const SettingsPage = lazy(() => import("@/pages/operations").then(m => ({default:m.SettingsPage})))
 const SearchPage = lazy(() => import("@/pages/operations").then(m => ({default:m.SearchPage})))
 const GpsPage = lazy(() => import("@/pages/operations").then(m => ({default:m.GpsPage})))
+const PredictionsPage = lazy(() => import("@/pages/predictions"))
 const VoicePage = lazy(() => import("@/pages/operations").then(m => ({default:m.VoicePage})))
 import { Navigate, Outlet, Route, Routes } from "react-router-dom"
 import { useAuth, type Role } from "@/lib/auth"
@@ -68,33 +69,38 @@ export default function App() {
         <Route element={<RequireAuth />}>
           <Route element={<AppLayout />}>
             <Route path="/" element={<Navigate to={user ? "/dashboard" : "/sign-in"} replace />} />
-            <Route path="/dashboard" element={user?.role === "executive" ? <ExecutivePage /> : <DashboardPage />} />
+            <Route path="/dashboard" element={user?.role === "executive" ? <ExecutivePage /> : user?.role === "system_admin" ? <Navigate to="/admin/users" replace /> : <DashboardPage />} />
             <Route path="/profile" element={<UserProfile />} />
             <Route path="/notifications-center" element={<NotificationsCenter />} />
-            <Route element={<RequireRole roles={["medical_officer","mortuary_clerk","pathologist","public_health_analyst","system_admin"]} />}><Route path="/search" element={<SearchPage />} /></Route>
-            <Route element={<RequireRole roles={["medical_officer","mortuary_clerk","system_admin"]} />}><Route path="/offline-sync" element={<OfflineSync />} /><Route path="/voice-autopsy" element={<VoicePage />} /></Route>
-            <Route element={<RequireRole roles={["medical_officer","mortuary_clerk","public_health_analyst","system_admin"]} />}><Route path="/signals" element={<SignalRegistryPage />} /></Route>
-            <Route element={<RequireRole roles={["medical_officer","public_health_analyst","system_admin"]} />}><Route path="/mpdsr" element={<MpdsrPage />} /><Route path="/cross-border" element={<CrossBorderPage />} /></Route>
-            <Route element={<RequireRole roles={["medical_officer","system_admin"]} />}><Route path="/gps-dashboard" element={<GpsPage />} /></Route>
-            <Route element={<RequireRole roles={["public_health_analyst","system_admin"]} />}><Route path="/alert-config" element={<ThresholdPage />} /><Route path="/resource-allocation" element={<ForecastPage />} /></Route>
-            <Route element={<RequireRole roles={["public_health_analyst","system_admin","executive"]} />}><Route path="/reports" element={<ReportsPage />} /><Route path="/executive-dashboard" element={<ExecutivePage />} /></Route>
+            <Route element={<RequireRole roles={["medical_officer","mortuary_clerk","pathologist","public_health_analyst"]} />}><Route path="/search" element={<SearchPage />} /></Route>
+            <Route element={<RequireRole roles={["medical_officer","mortuary_clerk"]} />}><Route path="/offline-sync" element={<OfflineSync />} /><Route path="/voice-autopsy" element={<VoicePage />} /></Route>
+            <Route element={<RequireRole roles={["medical_officer","mortuary_clerk","public_health_analyst"]} />}><Route path="/signals" element={<SignalRegistryPage />} /></Route>
+            <Route element={<RequireRole roles={["medical_officer","public_health_analyst"]} />}><Route path="/mpdsr" element={<MpdsrPage />} /><Route path="/cross-border" element={<CrossBorderPage />} /></Route>
+            <Route element={<RequireRole roles={["medical_officer","public_health_analyst"]} />}><Route path="/gps-dashboard" element={<GpsPage />} /></Route>
+            <Route element={<RequireRole roles={["public_health_analyst"]} />}><Route path="/alert-config" element={<ThresholdPage />} /><Route path="/resource-allocation" element={<ForecastPage />} /></Route>
+            <Route element={<RequireRole roles={["public_health_analyst","executive"]} />}><Route path="/reports" element={<ReportsPage />} /><Route path="/executive-dashboard" element={<ExecutivePage />} /></Route>
             <Route element={<RequireRole roles={["system_admin"]} />}><Route path="/security-dashboard" element={<SecurityPage />} /><Route path="/system-settings" element={<SettingsPage />} /></Route>
-            <Route element={<RequireRole roles={["medical_officer", "mortuary_clerk", "public_health_analyst", "system_admin"]} />}>
+            <Route element={<RequireRole roles={["medical_officer", "mortuary_clerk", "public_health_analyst"]} />}>
               <Route path="/notifications" element={<NotificationsPage />} />
               <Route path="/notifications/new" element={<NotificationNewPage />} />
             </Route>
             <Route path="/notifications/:id" element={<NotificationDetailPage />} />
-            <Route element={<RequireRole roles={["pathologist", "system_admin"]} />}>
+            <Route element={<RequireRole roles={["pathologist"]} />}>
               <Route path="/pathology/queue" element={<PathologyQueuePage />} />
               <Route path="/pathology/review/:id" element={<PathologyReviewPage />} />
             </Route>
-            <Route element={<RequireRole roles={["pathologist", "public_health_analyst", "system_admin"]} />}>
+            <Route element={<RequireRole roles={["pathologist", "public_health_analyst"]} />}>
               <Route path="/autopsy" element={<AutopsiesPage />} />
               <Route path="/autopsy/:id" element={<AutopsyDetailPage />} />
             </Route>
-            <Route element={<RequireRole roles={["public_health_analyst", "system_admin"]} />}>
+            <Route element={<RequireRole roles={["public_health_analyst"]} />}>
               <Route path="/analytics" element={<AnalyticsPage />} />
               <Route path="/analytics/map" element={<AnalyticsMapPage />} />
+            </Route>
+            <Route element={<RequireRole roles={["public_health_analyst", "executive"]} />}>
+              <Route path="/predictions" element={<PredictionsPage />} />
+            </Route>
+            <Route element={<RequireRole roles={["public_health_analyst", "system_admin"]} />}>
               <Route path="/audit" element={<AuditPage />} />
             </Route>
             <Route path="/alerts" element={<AlertsPage />} />

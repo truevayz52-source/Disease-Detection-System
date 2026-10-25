@@ -1,15 +1,14 @@
 import { Server } from "socket.io"
 import type { Server as HttpServer } from "node:http"
 import { EventEmitter } from "node:events"
-import { verifyToken, tokenHash } from "../auth/jwt.js"
-import { query } from "../db.js"
+import { authenticateToken } from "../auth/middleware.js"
 import { config } from "../config.js"
 export const events=new EventEmitter()
-/** Validates a JWT against live session state; also used by the voice stream. */
+/** Validates a JWT against live session state; also used by the voice stream.
+ *  Accepts both legacy session tokens and Supabase Auth JWTs. */
 export async function validateSessionToken(token:string){
-  if(!verifyToken(token))return null
-  const [row]=await query<any[]>("SELECT u.user_id, u.role, u.facility_id FROM sessions s JOIN users u ON u.user_id=s.user_id WHERE s.token_hash=? AND s.revoked=0 AND s.expires_at>NOW() AND u.status='active' AND (u.locked_until IS NULL OR u.locked_until<NOW())",[tokenHash(token)])
-  return row??null
+  const user=await authenticateToken(token)
+  return user?{user_id:user.userId,role:user.role,facility_id:user.facilityId}:null
 }
 export function attachRealtime(server:HttpServer){
   const io=new Server(server,{cors:{origin:config.clientOrigin},maxHttpBufferSize:16384})

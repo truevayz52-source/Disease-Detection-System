@@ -4,17 +4,18 @@
 -- AI adapter, S3) are intentionally excluded — no third-party integrations.
 
 -- ---------------------------------------------------------------------------
--- Health signals: community rumour / infodemic signal detection.
+-- Health signals: community death reporting / mortality surveillance signal
+-- detection (unreported, suspicious, maternal/perinatal, death clusters).
 -- Signals carry status + workflow_stage/evidence/action/outcome; transitions are
 -- appended to signal_workflow_events and mirrored into audit_log.
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `health_signals` (
   `signal_id` VARCHAR(36) PRIMARY KEY,
   `external_id` VARCHAR(128) UNIQUE COMMENT 'Deduplication key for offline/field ingestion',
-  `signal_type` VARCHAR(40) NOT NULL DEFAULT 'rumour' COMMENT 'rumour|outbreak_report|misinformation|community_alert',
+  `signal_type` VARCHAR(40) NOT NULL DEFAULT 'unreported_death' COMMENT 'unreported_death|suspicious_death|maternal_perinatal|death_cluster|community_alert',
   `title` VARCHAR(255) NOT NULL,
   `description` TEXT,
-  `source_channel` VARCHAR(40) NOT NULL DEFAULT 'community' COMMENT 'community|vhw|facility|media|offline',
+  `source_channel` VARCHAR(40) NOT NULL DEFAULT 'community' COMMENT 'community|vhw|facility|police|media|offline',
   `district` VARCHAR(100),
   `province` VARCHAR(100),
   `facility_id` VARCHAR(36),

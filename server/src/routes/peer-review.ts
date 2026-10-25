@@ -7,7 +7,7 @@ import { writeAudit } from "../lib/audit.js"
 export const peerReviewRouter = Router()
 
 // Request peer review
-peerReviewRouter.post("/request", requireAuth, requireRole("pathologist", "public_health_analyst", "system_admin"), async (req, res) => {
+peerReviewRouter.post("/request", requireAuth, requireRole("pathologist", "public_health_analyst"), async (req, res) => {
   const schema = z.object({
     imageId: z.string(),
     reviewerId: z.string(),
@@ -30,7 +30,7 @@ peerReviewRouter.post("/request", requireAuth, requireRole("pathologist", "publi
 })
 
 // Submit peer review
-peerReviewRouter.post("/:reviewId/submit", requireAuth, requireRole("pathologist", "public_health_analyst", "system_admin"), async (req, res) => {
+peerReviewRouter.post("/:reviewId/submit", requireAuth, requireRole("pathologist", "public_health_analyst"), async (req, res) => {
   const schema = z.object({
     reviewNotes: z.string(),
     recommendation: z.string(),
@@ -53,7 +53,7 @@ peerReviewRouter.post("/:reviewId/submit", requireAuth, requireRole("pathologist
 })
 
 // Get pending reviews for user
-peerReviewRouter.get("/pending", requireAuth, requireRole("pathologist", "public_health_analyst", "system_admin"), async (req, res) => {
+peerReviewRouter.get("/pending", requireAuth, requireRole("pathologist", "public_health_analyst"), async (req, res) => {
   const reviews = await query<any[]>(
     `SELECT pr.*, ti.file_path, dn.notification_id
      FROM peer_reviews pr

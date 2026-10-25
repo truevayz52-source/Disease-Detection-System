@@ -4,9 +4,9 @@ import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../../data/auth_repository.dart';
-import '../../data/api_client.dart';
 import '../../data/dds_repository.dart';
 import '../../data/draft_store.dart';
+import '../../data/mutation_service.dart';
 import '../../data/sync_service.dart';
 import '../../ui/app_shell.dart';
 import '../../ui/theme.dart';
@@ -30,6 +30,7 @@ class NotificationDetailScreen extends StatefulWidget {
 
 class _NotificationDetailScreenState extends State<NotificationDetailScreen> {
   NotificationDetail? _detail;
+  Map<String, dynamic>? _local;
   Object? _error;
   bool _uploading = false;
 
@@ -45,12 +46,33 @@ class _NotificationDetailScreenState extends State<NotificationDetailScreen> {
       if (mounted) {
         setState(() {
           _detail = d;
+          _local = null;
           _error = null;
         });
       }
     } catch (e) {
-      if (mounted) setState(() => _error = e);
+      // Not on the server — fall back to the local shadow record so a case
+      // captured offline still opens (and shows it hasn't synced yet).
+      final local = await _localRecord();
+      if (mounted) {
+        setState(() {
+          _local = local;
+          _error = local == null ? e : null;
+        });
+      }
     }
+  }
+
+  /// The `offline_cases` row for this id, when the notification was
+  /// captured on-device and hasn't synced yet.
+  Future<Map<String, dynamic>?> _localRecord() async {
+    final reports = await OfflineCaseStore.localReports();
+    for (final r in reports) {
+      if (r['local_id'] == widget.id && r['kind'] == 'notification') {
+        return r;
+      }
+    }
+    return null;
   }
 
   Future<void> _pickAndUpload() async {
@@ -61,31 +83,36 @@ class _NotificationDetailScreenState extends State<NotificationDetailScreen> {
     if (picked == null || !mounted) return;
     setState(() => _uploading = true);
     try {
-      await context.read<DdsRepository>().uploadImage(widget.id, picked.path);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(tr('Image uploaded and hashed to case.'))),
-        );
-      }
-      await _load();
-    } on ApiException catch (e) {
-      if (e.status == 0) {
-        // Offline — keep the file path and replay the upload on reconnect.
-        await OfflineQueue().enqueueImage(widget.id, picked.path);
-        if (mounted) {
-          context.read<SyncService>().refreshPending();
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                tr('Offline — image queued and will upload when back online.'),
+      // MutationService sends inline when online and queues the upload
+      // (encrypted, file path retained) when not.
+      final res = await context.read<MutationService>().upload(
+        '/notifications/${widget.id}/images',
+        picked.path,
+        entityType: 'death_notification',
+        entityId: widget.id,
+      );
+      if (!mounted) return;
+      context.read<SyncService>().refreshPending();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            switch (res.status) {
+              MutationStatus.synced => tr(
+                'Image uploaded and hashed to case.',
               ),
-            ),
-          );
-        }
-      } else if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.message)));
-      }
+              MutationStatus.queued => tr(
+                'Offline — image queued and will upload when back online.',
+              ),
+              MutationStatus.conflict => tr(
+                'Upload conflicted with a newer server version.',
+              ),
+              MutationStatus.rejected =>
+                res.error?.message ?? tr('Upload failed'),
+            },
+          ),
+        ),
+      );
+      await _load();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context)
@@ -105,14 +132,13 @@ class _NotificationDetailScreenState extends State<NotificationDetailScreen> {
           'medical_officer',
           'pathologist',
           'public_health_analyst',
-          'system_admin',
         ].contains(user.role);
     final n = _detail?.notification;
 
     return AppScaffold(
       title: tr('Notification Detail'),
       child: _detail == null
-          ? loadingOr(_error, onRetry: _load)
+          ? (_local != null ? _localView(_local!) : loadingOr(_error, onRetry: _load))
           : RefreshIndicator(
               onRefresh: _load,
               child: ListView(
@@ -167,6 +193,23 @@ class _NotificationDetailScreenState extends State<NotificationDetailScreen> {
                             tr('Reported by'),
                             '${n.reportedByName} · ${fmtDate(n.createdAt)}',
                           ),
+                          if (n.assignedTo != null) ...[
+                            InfoRow(tr('Assigned to'), n.assigneeName ?? '—'),
+                            if (n.reviewDueAt != null)
+                              InfoRow(
+                                tr('Review due'),
+                                '${fmtDateTime(n.reviewDueAt)}${n.overdue ? ' (overdue)' : ''}',
+                              ),
+                          ],
+                          if (n.rejectionReason != null &&
+                              n.rejectionReason!.isNotEmpty) ...[
+                            InfoRow(tr('Rejection reason'), n.rejectionReason!),
+                            if (n.rejectedAt != null)
+                              InfoRow(
+                                tr('Rejected at'),
+                                fmtDateTime(n.rejectedAt!),
+                              ),
+                          ],
                           if (n.clinicalSummary != null &&
                               n.clinicalSummary!.isNotEmpty) ...[
                             const SizedBox(height: 4),
@@ -294,10 +337,134 @@ class _NotificationDetailScreenState extends State<NotificationDetailScreen> {
                             ],
                           ),
                   ),
+                  if (_detail!.certification != null) ...[
+                    const SizedBox(height: 16),
+                    SectionCard(
+                      title: tr('Medical certification'),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          InfoRow(
+                            tr('Certified by'),
+                            _detail!.certification!.certifiedByName,
+                          ),
+                          InfoRow(
+                            tr('Manner of death'),
+                            _detail!.certification!.mannerOfDeath,
+                          ),
+                          InfoRow(
+                            tr('Final ICD'),
+                            _detail!.certification!.finalIcdCode,
+                          ),
+                          InfoRow(
+                            tr('Cause of death'),
+                            _detail!.certification!.finalCauseOfDeath,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  if (n.status == 'certified' || n.status == 'finalized') ...[
+                    const SizedBox(height: 16),
+                    SectionCard(
+                      title: tr('Death certificate'),
+                      child: Text(
+                        tr(
+                          'A printable death certificate is available for this case.',
+                        ),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 24),
                 ],
               ),
             ),
+    );
+  }
+
+  /// Detail view for a record captured on this device that hasn't synced —
+  /// renders straight from the `offline_cases` shadow row.
+  Widget _localView(Map<String, dynamic> r) {
+    final d = (r['data'] as Map?)?.cast<String, dynamic>() ?? const {};
+    final p = (d['patient'] as Map?)?.cast<String, dynamic>() ?? const {};
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFEF3C7),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            children: [
+              const Icon(
+                Icons.cloud_upload_outlined,
+                size: 16,
+                color: Color(0xFF92400E),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  tr(
+                    'Recorded on this device — will sync when a connection is available.',
+                  ),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF92400E),
+                  ),
+                ),
+              ),
+              const StatusBadge('pending_sync'),
+            ],
+          ),
+        ),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  p['fullName']?.toString() ?? '—',
+                  style: const TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                InfoRow(tr('National ID'), p['nationalId']?.toString() ?? '—'),
+                InfoRow(
+                  tr('Age / Gender'),
+                  '${p['age'] ?? '—'} / ${tr(p['gender']?.toString() ?? '')}',
+                ),
+                InfoRow(
+                  tr('Address'),
+                  p['residentialAddress']?.toString() ?? '—',
+                ),
+                InfoRow(
+                  tr('Date of death'),
+                  fmtDateTime(d['dateOfDeath']?.toString()),
+                ),
+                InfoRow(
+                  tr('Preliminary ICD'),
+                  d['preliminaryIcdCode']?.toString() ?? '—',
+                ),
+                if (d['clinicalSummary']?.toString().isNotEmpty == true)
+                  InfoRow(
+                    tr('Clinical summary'),
+                    d['clinicalSummary'].toString(),
+                  ),
+                InfoRow(
+                  tr('Queued'),
+                  fmtDateTime(r['queuedAt']?.toString()),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

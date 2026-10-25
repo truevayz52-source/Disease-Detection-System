@@ -17,7 +17,7 @@ const SUBTITLES: Record<string, string> = {
   "Autopsy Reports": "Finalised post-mortem examinations",
   "Autopsy Report": "Post-mortem examination detail",
   "Verbal Autopsy": "Community death interviews",
-  "Signal Registry": "Detected outbreak signals",
+  "Mortality Signals": "Community death reports and triage",
   "MPDSR Workflows": "Maternal and perinatal death reviews",
   "Alerts": "Active outbreak alerts",
   "Outbreak Analytics": "Mortality trends and cluster analysis",

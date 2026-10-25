@@ -13,14 +13,14 @@ export async function notifyUser(userId: string, title: string, message: string,
 }
 realtimeRouter.get("/", async (req, res) => {
   const items = await query<any[]>("SELECT * FROM user_notifications WHERE user_id=? AND (expires_at IS NULL OR expires_at>NOW()) ORDER BY created_at DESC LIMIT 100", [req.user!.userId])
-  const [count] = await query<any[]>("SELECT COUNT(*) AS unread FROM user_notifications WHERE user_id=? AND is_read=0 AND (expires_at IS NULL OR expires_at>NOW())", [req.user!.userId])
+  const [count] = await query<any[]>("SELECT COUNT(*) AS unread FROM user_notifications WHERE user_id=? AND NOT is_read AND (expires_at IS NULL OR expires_at>NOW())", [req.user!.userId])
   res.json({ items, unread: Number(count.unread) })
 })
 realtimeRouter.patch("/read-all", async (req,res) => {
-  await query("UPDATE user_notifications SET is_read=1 WHERE user_id=?",[req.user!.userId]); res.json({ok:true})
+  await query("UPDATE user_notifications SET is_read=true WHERE user_id=?",[req.user!.userId]); res.json({ok:true})
 })
 realtimeRouter.patch("/:id/read", async (req,res) => {
-  await query("UPDATE user_notifications SET is_read=1 WHERE notification_id=? AND user_id=?",[req.params.id,req.user!.userId]); res.json({ok:true})
+  await query("UPDATE user_notifications SET is_read=true WHERE notification_id=? AND user_id=?",[req.params.id,req.user!.userId]); res.json({ok:true})
 })
 realtimeRouter.delete("/:id", async (req,res) => {
   await query("DELETE FROM user_notifications WHERE notification_id=? AND user_id=?",[req.params.id,req.user!.userId]); res.json({ok:true})

@@ -1,7 +1,8 @@
 import { useState } from "react"
+import { useNavigate } from "react-router-dom"
 import useSWR from "swr"
 import { toast } from "sonner"
-import { Plus, Radio, RefreshCw, Siren, Timer, TriangleAlert } from "lucide-react"
+import { FilePlus2, Plus, Radio, RefreshCw, Siren, Timer, TriangleAlert } from "lucide-react"
 import { SiteHeader } from "@/components/site-header"
 import { StatCard } from "@/components/stat-card"
 import { Badge } from "@/components/ui/badge"
@@ -15,7 +16,21 @@ import { Textarea } from "@/components/ui/textarea"
 import { api } from "@/lib/api"
 import { useAuth } from "@/lib/auth"
 import { fmtDateTime } from "@/lib/format"
+import { saveDraft } from "@/lib/offline-queue"
+import type { Facility } from "@/lib/types"
 import { usePreferences } from "@/lib/preferences"
+
+// Signal types that represent a death — these can be converted straight
+// into a death notification once verified.
+const DEATH_SIGNAL_TYPES = ["unreported_death", "suspicious_death", "maternal_perinatal", "death_cluster"]
+
+const SIGNAL_TYPE_LABELS: Record<string, string> = {
+  unreported_death: "Unreported death",
+  suspicious_death: "Suspicious death",
+  maternal_perinatal: "Maternal / perinatal death",
+  death_cluster: "Death cluster",
+  community_alert: "Community alert",
+}
 
 interface Signal {
   signal_id: string
@@ -25,10 +40,13 @@ interface Signal {
   source_channel: string
   district: string | null
   province: string | null
+  facility_id: string | null
   facility_name: string | null
   severity: string
   status: string
   workflow_stage: string
+  linked_notification_id: string | null
+  linked_alert_id: string | null
   reporter_name: string | null
   reported_at: string
   risk_score: number | null
@@ -51,17 +69,21 @@ const SEVERITY_VARIANT: Record<string, "outline" | "secondary" | "destructive"> 
 }
 
 export default function SignalRegistryPage() {const{t}=usePreferences();
+  const navigate = useNavigate()
   const { user } = useAuth()
   const [status, setStatus] = useState("new")
   const [open, setOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({
-    title: "", signalType: "rumour", sourceChannel: "community",
-    district: "", province: "", severity: "medium", description: "",
+    title: "", signalType: "unreported_death", sourceChannel: "community",
+    district: "", province: "", facilityId: "", severity: "medium", description: "",
   })
+  const canTriage = user && ["public_health_analyst"].includes(user.role)
   const { data, mutate } = useSWR<{ items: Signal[] }>(`/signals?status=${status}`, (u: string) => api(u))
   const { data: playbooks } = useSWR<{ items: Playbook[] }>("/playbooks", (u: string) => api(u))
-  const canTriage = user && ["public_health_analyst", "system_admin"].includes(user.role)
+  const { data: facilities } = useSWR<{ items: Facility[] }>("/facilities", (u: string) => api(u))
+  const { data: activeAlerts } = useSWR<{ items: { alert_id: string; disease_category: string; district: string }[] }>(
+    canTriage ? "/alerts?status=active" : null, (u: string) => api(u))
 
   function riskVariant(score: number | null): "outline" | "secondary" | "destructive" {
     if (score == null) return "outline"
@@ -101,17 +123,33 @@ export default function SignalRegistryPage() {const{t}=usePreferences();
         body: JSON.stringify({
           title: form.title, signalType: form.signalType, sourceChannel: form.sourceChannel,
           district: form.district || undefined, province: form.province || undefined,
+          facilityId: form.facilityId || undefined,
           severity: form.severity, description: form.description || undefined,
         }),
       })
       toast.success(t("Signal captured."))
       setOpen(false)
-      setForm({ title: "", signalType: "rumour", sourceChannel: "community", district: "", province: "", severity: "medium", description: "" })
+      setForm({ title: "", signalType: "unreported_death", sourceChannel: "community", district: "", province: "", facilityId: "", severity: "medium", description: "" })
       mutate()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to capture signal")
     } finally {
       setSaving(false)
+    }
+  }
+
+  function pickFacility(id: string) {
+    const f = facilities?.items.find((x) => x.facility_id === id)
+    setForm((fm) => ({ ...fm, facilityId: id, ...(f ? { district: f.district, province: f.province } : {}) }))
+  }
+
+  async function linkAlert(signalId: string, alertId: string) {
+    try {
+      await api(`/signals/${signalId}/workflow`, { method: "PATCH", body: JSON.stringify({ linkedAlertId: alertId }) })
+      toast.success(t("Alert linked."))
+      mutate()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Link failed")
     }
   }
 
@@ -125,9 +163,22 @@ export default function SignalRegistryPage() {const{t}=usePreferences();
     }
   }
 
+  // Convert a death signal into a prefilled death-notification draft; the
+  // signal id rides along so submitting the notification links back to it.
+  function createFromSignal(s: Signal) {
+    saveDraft({
+      facilityId: s.facility_id ?? "",
+      residentialAddress: [s.district, s.province].filter(Boolean).join(", "),
+      clinicalSummary: s.description ?? "",
+      isMaternalPerinatal: s.signal_type === "maternal_perinatal",
+      linkedSignalId: s.signal_id,
+    })
+    navigate("/notifications/new")
+  }
+
   return (
     <>
-      <SiteHeader title={t("Signal Registry")} />
+      <SiteHeader title={t("Mortality Signals")} />
       <div className="space-y-4 p-4 lg:p-6">
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           <StatCard label={`${status[0].toUpperCase() + status.slice(1)} signals`} value={data?.items.length} icon={Radio} color="blue" compact />
@@ -161,7 +212,7 @@ export default function SignalRegistryPage() {const{t}=usePreferences();
                   <div>
                     <p className="font-medium">{s.title}</p>
                     <p className="text-sm text-muted-foreground">
-                      {s.signal_type.replace(/_/g, " ")} · {s.source_channel}
+                      {t(SIGNAL_TYPE_LABELS[s.signal_type] ?? s.signal_type.replace(/_/g, " "))} · {s.source_channel}
                       {s.district ? ` · ${s.district}` : ""}{s.province ? `, ${s.province}` : ""}
                     </p>
                   </div>
@@ -210,7 +261,30 @@ export default function SignalRegistryPage() {const{t}=usePreferences();
                     )}
                   </div>
                 )}
+                {(s.linked_notification_id || s.linked_alert_id) && (
+                  <p className="text-[11px] text-muted-foreground">
+                    {s.linked_notification_id ? `${t("Linked notification")}: ${s.linked_notification_id}` : ""}
+                    {s.linked_alert_id ? ` · ${t("Linked alert")}: ${s.linked_alert_id}` : ""}
+                  </p>
+                )}
                 <div className="flex items-center gap-2">
+                  {/* Conversion is gated on verification — an unverified signal
+                      must not become an official death record. */}
+                  {DEATH_SIGNAL_TYPES.includes(s.signal_type) && (s.workflow_stage === "verified" || s.workflow_stage === "escalated") && (
+                    <Button size="sm" variant="secondary" onClick={() => createFromSignal(s)}>
+                      <FilePlus2 className="size-3.5" /> {t("Create notification")}
+                    </Button>
+                  )}
+                  {s.signal_type === "death_cluster" && canTriage && s.workflow_stage !== "closed" && !s.linked_alert_id && (
+                    <Select onValueChange={(v) => { const id = v as string; if (id) linkAlert(s.signal_id, id) }}>
+                      <SelectTrigger className="h-8 w-44 text-xs"><SelectValue placeholder={t("Link outbreak alert")} /></SelectTrigger>
+                      <SelectContent>
+                        {(activeAlerts?.items ?? []).map((a) => (
+                          <SelectItem key={a.alert_id} value={a.alert_id}>{a.disease_category} — {a.district}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
                   <label className="text-[11px] text-muted-foreground cursor-pointer hover:text-foreground">
                     <input type="file" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadEvidence(s.signal_id, f); e.target.value = "" }} />
                     + Attach evidence file
@@ -236,13 +310,12 @@ export default function SignalRegistryPage() {const{t}=usePreferences();
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>{t("Signal type")}</Label>
-                <Select value={form.signalType} onValueChange={(v) => setForm({ ...form, signalType: v ?? "rumour" })}>
+                <Select value={form.signalType} onValueChange={(v) => setForm({ ...form, signalType: v ?? "unreported_death" })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="rumour">{t("Rumour")}</SelectItem>
-                    <SelectItem value="outbreak_report">{t("Outbreak report")}</SelectItem>
-                    <SelectItem value="misinformation">{t("Misinformation")}</SelectItem>
-                    <SelectItem value="community_alert">{t("Community alert")}</SelectItem>
+                    {Object.entries(SIGNAL_TYPE_LABELS).map(([v, label]) => (
+                      <SelectItem key={v} value={v}>{t(label)}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -254,6 +327,7 @@ export default function SignalRegistryPage() {const{t}=usePreferences();
                     <SelectItem value="community">{t("Community")}</SelectItem>
                     <SelectItem value="vhw">{t("Village Health Worker")}</SelectItem>
                     <SelectItem value="facility">{t("Facility")}</SelectItem>
+                    <SelectItem value="police">{t("Police")}</SelectItem>
                     <SelectItem value="media">{t("Media")}</SelectItem>
                     <SelectItem value="offline">{t("Offline capture")}</SelectItem>
                   </SelectContent>
@@ -281,6 +355,19 @@ export default function SignalRegistryPage() {const{t}=usePreferences();
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+            <div className="space-y-2">
+              <Label>{t("Facility (if known)")}</Label>
+              <Select value={form.facilityId} onValueChange={(v) => pickFacility(v ?? "")}>
+                <SelectTrigger><SelectValue placeholder={t("Select facility")} /></SelectTrigger>
+                <SelectContent>
+                  {(facilities?.items ?? [])
+                    .filter((f) => !form.district || f.district.toLowerCase() === form.district.toLowerCase() || f.province.toLowerCase() === form.province.toLowerCase())
+                    .map((f) => (
+                      <SelectItem key={f.facility_id} value={f.facility_id}>{f.facility_name} — {f.district}</SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label>{t("Description")}</Label>

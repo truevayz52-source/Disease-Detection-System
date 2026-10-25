@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../data/draft_store.dart';
+import '../../data/mutation_service.dart';
 import '../../data/sync_service.dart';
 import '../../ui/app_shell.dart';
 import '../../ui/theme.dart';
@@ -10,7 +11,8 @@ import '../../ui/widgets.dart';
 import '../../l10n/app_localizations.dart';
 
 /// Port of client/src/pages/offline-sync.tsx — shows pending offline
-/// mutations and triggers a manual sync.
+/// mutations and triggers a manual sync. v2 adds per-op attempt counts and
+/// errors, a conflicts section for last-write-wins losers, and discard.
 class OfflineSyncScreen extends StatefulWidget {
   const OfflineSyncScreen({super.key});
 
@@ -20,6 +22,7 @@ class OfflineSyncScreen extends StatefulWidget {
 
 class _OfflineSyncScreenState extends State<OfflineSyncScreen> {
   List<QueuedItem> _items = const [];
+  List<Map<String, dynamic>> _resolved = const [];
   bool _loading = true;
 
   @override
@@ -30,13 +33,27 @@ class _OfflineSyncScreenState extends State<OfflineSyncScreen> {
 
   Future<void> _load() async {
     final items = await OfflineQueue().entries();
+    final reports = await OfflineCaseStore.localReports();
     if (mounted) {
       setState(() {
         _items = items;
+        _resolved = reports
+            .where(
+              (r) =>
+                  r['sync_status'] == 'CONFLICT' ||
+                  r['sync_status'] == 'REJECTED',
+            )
+            .toList();
         _loading = false;
       });
     }
   }
+
+  IconData _iconFor(QueuedItem item) => switch (item.kind) {
+    'multipart' => Icons.photo_outlined,
+    'http' => Icons.edit_note_outlined,
+    _ => Icons.assignment_outlined,
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -146,6 +163,55 @@ class _OfflineSyncScreenState extends State<OfflineSyncScreen> {
                       ),
                     ),
                   ),
+                // Conflicts + rejections — LWW losers kept for audit.
+                if (_resolved.isNotEmpty) ...[
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: Text(
+                      tr('Needs attention'),
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  for (final r in _resolved)
+                    Card(
+                      color: r['sync_status'] == 'CONFLICT'
+                          ? const Color(0xFFFFF7ED)
+                          : const Color(0xFFFEF2F2),
+                      margin: const EdgeInsets.only(bottom: 8),
+                      child: ListTile(
+                        leading: Icon(
+                          r['sync_status'] == 'CONFLICT'
+                              ? Icons.merge_type_outlined
+                              : Icons.error_outline,
+                          color: r['sync_status'] == 'CONFLICT'
+                              ? const Color(0xFF9A3412)
+                              : DdsColors.destructive,
+                        ),
+                        title: Text(
+                          r['kind'] == 'notification'
+                              ? tr('Death notification — {name}', {
+                                  'name':
+                                      (r['data'] as Map?)?['patient']
+                                          ?['fullName'] ??
+                                      tr('unknown patient'),
+                                })
+                              : '${r['method'] ?? ''} ${r['path'] ?? ''}'
+                                    .trim(),
+                          style: const TextStyle(fontSize: 13),
+                        ),
+                        subtitle: Text(
+                          '${tr(kStatusLabels[r['sync_status'] == 'CONFLICT' ? 'conflict' : 'rejected'] ?? 'Rejected')} · ${fmtDateTime(r['resolvedAt']?.toString())}'
+                          '${r['lastError'] != null ? '\n${r['lastError']}' : ''}',
+                          style: const TextStyle(fontSize: 11),
+                        ),
+                        isThreeLine: r['lastError'] != null,
+                      ),
+                    ),
+                  const SizedBox(height: 8),
+                ],
                 if (_items.isEmpty)
                   Card(
                     child: EmptyState(
@@ -158,9 +224,7 @@ class _OfflineSyncScreenState extends State<OfflineSyncScreen> {
                       margin: const EdgeInsets.only(bottom: 8),
                       child: ListTile(
                         leading: Icon(
-                          item.type == 'image'
-                              ? Icons.photo_outlined
-                              : Icons.assignment_outlined,
+                          _iconFor(item),
                           color: DdsColors.primary,
                         ),
                         title: Text(
@@ -169,9 +233,32 @@ class _OfflineSyncScreenState extends State<OfflineSyncScreen> {
                         ),
                         subtitle: Text(
                           tr('Queued {ts}', {
-                            'ts': fmtDateTime(item.queuedAt.toIso8601String()),
-                          }),
+                                'ts': fmtDateTime(
+                                  item.queuedAt.toIso8601String(),
+                                ),
+                              }) +
+                              (item.attempts > 0
+                                  ? ' · ${tr('{n} attempt(s)', {'n': item.attempts})}'
+                                  : '') +
+                              (item.lastError != null
+                                  ? '\n${item.lastError}'
+                                  : ''),
                           style: const TextStyle(fontSize: 11),
+                        ),
+                        isThreeLine: item.lastError != null,
+                        trailing: IconButton(
+                          tooltip: tr('Discard'),
+                          icon: const Icon(
+                            Icons.delete_outline,
+                            size: 18,
+                            color: DdsColors.mutedForeground,
+                          ),
+                          onPressed: () async {
+                            await context.read<MutationService>().discard(
+                              item.id,
+                            );
+                            await _load();
+                          },
                         ),
                       ),
                     ),

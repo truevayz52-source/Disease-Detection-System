@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'read_cache.dart';
 import 'server_resolver.dart';
 import '../l10n/app_localizations.dart';
 
@@ -53,10 +54,19 @@ class ApiClient {
   Future<void>? get ready => _init;
   Future<void>? _init;
   bool _resolving = false;
+  DateTime _lastDiscovery = DateTime.fromMillisecondsSinceEpoch(0);
 
   /// True while a low-bandwidth link is active (cellular / no wifi). Fed by
   /// SyncService's connectivity listener; doubles request timeouts.
   bool networkSlow = false;
+
+  /// Set by SyncService when the server is known-unreachable. GETs are then
+  /// answered straight from [ReadCache] and mutations fail immediately with
+  /// status 0 — the UI never waits out a socket timeout before going
+  /// offline.
+  bool assumeOffline = false;
+
+  final ReadCache _readCache = ReadCache();
 
   /// Bearer token for the active session; null when signed out.
   String? token;
@@ -110,11 +120,27 @@ class ApiClient {
 
   /// After repeated status-0 failures, drop the stale last-good pointer and
   /// re-resolve — but never override an address the user set explicitly.
+  /// When every static candidate is dead (e.g. the device moved to a
+  /// different Wi-Fi and the old IP is unreachable), run LAN discovery so
+  /// the beacon or a subnet scan can re-find the server hands-free.
   void _maybeReresolve() {
     unawaited(() async {
       await ServerResolver.invalidateLastGood(_baseUrl);
       if (await ServerResolver.savedOverride() == _baseUrl) return;
       await _resolve();
+      if (await ServerResolver.probe(_baseUrl)) return;
+      // Cooldown — a /24 scan is ~254 TCP probes; don't run it per request.
+      if (DateTime.now().difference(_lastDiscovery) <
+          const Duration(minutes: 1)) {
+        return;
+      }
+      _lastDiscovery = DateTime.now();
+      final found = await ServerResolver.discoverOnLan();
+      if (found.isNotEmpty) {
+        _baseUrl = found.first;
+        await ServerResolver.markLastGood(found.first);
+        onReachability?.call(true);
+      }
     }());
   }
 
@@ -140,6 +166,10 @@ class ApiClient {
     bool useCache = true,
   }) async {
     final uri = Uri.parse('$baseUrl$path').replace(queryParameters: query);
+    // Offline-first gate: when SyncService knows the server is unreachable,
+    // skip the socket entirely — reads come from the encrypted read cache
+    // and writes fail fast so callers can enqueue without blocking the UI.
+    if (assumeOffline) return _offlineOrThrow(method, uri, useCache: useCache);
     final headers = {..._headers};
     Object? encoded;
     if (body != null) {
@@ -185,11 +215,10 @@ class ApiClient {
       // Cache successful reads so the app can render last-known data offline.
       lastLiveFetchAt = DateTime.now();
       final ts = lastLiveFetchAt!.toIso8601String();
-      SharedPreferences.getInstance().then((p) {
-        p.setString('cache:${uri.toString()}', res.body);
-        p.setString('cache_ts:${uri.toString()}', ts);
-        p.setString('dds_last_live_get', ts);
-      });
+      unawaited(_readCache.put(uri.toString(), res.body));
+      SharedPreferences.getInstance().then(
+        (p) => p.setString('dds_last_live_get', ts),
+      );
     }
     if (!ct.contains('json')) return res.body;
     return jsonDecode(res.body);
@@ -244,12 +273,10 @@ class ApiClient {
     bool useCache = true,
   }) async {
     if (method == 'GET' && useCache) {
-      final cached = (await SharedPreferences.getInstance()).getString(
-        'cache:${uri.toString()}',
-      );
+      final cached = await _readCache.getJson(uri.toString());
       if (cached != null) {
         lastFromCache = true;
-        return jsonDecode(cached);
+        return cached;
       }
     }
     throw ApiException(
@@ -267,6 +294,7 @@ class ApiClient {
       request('POST', path, body: body);
   Future<dynamic> patch(String path, {Object? body}) =>
       request('PATCH', path, body: body);
+  Future<dynamic> delete(String path) => request('DELETE', path);
 
   /// Multipart upload for tele-pathology images (POST /notifications/:id/images).
   Future<dynamic> uploadImage(
@@ -274,9 +302,31 @@ class ApiClient {
     String filePath, {
     String field = 'file',
   }) async {
-    final uri = Uri.parse('$baseUrl/notifications/$notificationId/images');
+    return postMultipart(
+      '/notifications/$notificationId/images',
+      filePath,
+      field: field,
+    );
+  }
+
+  /// Generic multipart POST — used for signal evidence (POST /evidence) and
+  /// audio transcription (POST /voice/transcribe).
+  Future<dynamic> postMultipart(
+    String path,
+    String filePath, {
+    String field = 'file',
+    Map<String, String> fields = const {},
+  }) async {
+    if (assumeOffline) {
+      throw ApiException(
+        0,
+        tr('Cannot reach the DDS server. Check your connection.'),
+      );
+    }
+    final uri = Uri.parse('$baseUrl$path');
     final req = http.MultipartRequest('POST', uri)
       ..headers.addAll(_headers)
+      ..fields.addAll(fields)
       ..files.add(await http.MultipartFile.fromPath(field, filePath));
     http.StreamedResponse streamed;
     try {

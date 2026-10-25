@@ -64,6 +64,11 @@ class DdsRepository {
       autopsy: res['autopsy'] == null
           ? null
           : AutopsyReport.fromJson(res['autopsy'] as Map<String, dynamic>),
+      certification: res['certification'] == null
+          ? null
+          : MedicalCertification.fromJson(
+              res['certification'] as Map<String, dynamic>,
+            ),
     );
   }
 
@@ -144,6 +149,27 @@ class DdsRepository {
   Future<void> finalizeAutopsy(String id) =>
       _api.patch('/autopsies/$id/finalize');
 
+  Future<dynamic> verifyAutopsy(String id) => _api.get('/autopsies/$id/verify');
+
+  /// POST /notifications/:id/certify — medical officer MCCD certification.
+  Future<void> certifyNotification(String id, Map<String, dynamic> form) =>
+      _api.post('/notifications/$id/certify', body: form);
+
+  /// POST /notifications/:id/reject — analyst/admin with reason.
+  Future<void> rejectNotification(String id, String reason) =>
+      _api.post('/notifications/$id/reject', body: {'reason': reason});
+
+  /// PATCH /notifications/:id/assign — pathologist assignment.
+  Future<void> assignNotification(String id, String? assignedTo) =>
+      _api.patch('/notifications/$id/assign', body: {'assignedTo': assignedTo});
+
+  Future<List<UserRow>> assignablePathologists() async {
+    final res = await _api.get('/users/assignable-pathologists');
+    return ((res['items'] as List?) ?? [])
+        .map((e) => UserRow.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
   // ── AI (guarded Gemini via /api/ai — server re-masks before dispatch) ──────
 
   /// Text must already be masked by the caller (deidentify.dart) — this repo
@@ -213,10 +239,12 @@ class NotificationDetail {
   final DeathNotification notification;
   final List<TelepathologyImage> images;
   final AutopsyReport? autopsy;
+  final MedicalCertification? certification;
   const NotificationDetail({
     required this.notification,
     required this.images,
     this.autopsy,
+    this.certification,
   });
 }
 

@@ -3,6 +3,9 @@ import { requireAuth, requireRole } from "../auth/middleware.js"
 import { query } from "../db.js"
 import { verifyAuditChain } from "../lib/audit.js"
 
+let verifyCache: { at: number; result: Awaited<ReturnType<typeof verifyAuditChain>> } | null = null
+const VERIFY_TTL_MS = 30_000
+
 export const auditRouter = Router()
 
 const VIEWERS = requireRole("public_health_analyst", "system_admin")
@@ -21,19 +24,24 @@ auditRouter.get("/", requireAuth, VIEWERS, async (req, res) => {
     params.push(String(req.query.entityType))
   }
   const whereSql = where.length ? "WHERE " + where.join(" AND ") : ""
-  const rows = await query<any[]>(
-    `SELECT a.audit_id, a.action, a.entity_type, a.entity_id, a.ip_address, a.details,
-            a.record_hash, a.previous_hash, a.created_at, u.full_name AS user_name
-     FROM audit_log a LEFT JOIN users u ON u.user_id = a.user_id
-     ${whereSql}
-     ORDER BY a.created_at DESC, a.audit_id DESC
-     LIMIT ? OFFSET ?`,
-    [...params, size, (page - 1) * size],
-  )
-  const [countRow] = await query<any[]>(`SELECT COUNT(*) AS c FROM audit_log a ${whereSql}`, params)
+  const [rows, [countRow]] = await Promise.all([
+    query<any[]>(
+      `SELECT a.audit_id, a.action, a.entity_type, a.entity_id, a.ip_address, a.details,
+              a.record_hash, a.previous_hash, a.created_at, u.full_name AS user_name
+       FROM audit_log a LEFT JOIN users u ON u.user_id = a.user_id
+       ${whereSql}
+       ORDER BY a.created_at DESC, a.audit_id DESC
+       LIMIT ? OFFSET ?`,
+      [...params, size, (page - 1) * size],
+    ),
+    query<any[]>(`SELECT COUNT(*) AS c FROM audit_log a ${whereSql}`, params),
+  ])
   res.json({ items: rows, page, size, total: Number(countRow?.c ?? 0) })
 })
 
 auditRouter.get("/verify", requireAuth, VIEWERS, async (_req, res) => {
-  res.json(await verifyAuditChain())
+  if (verifyCache && Date.now() - verifyCache.at < VERIFY_TTL_MS) return res.json(verifyCache.result)
+  const result = await verifyAuditChain()
+  verifyCache = { at: Date.now(), result }
+  res.json(result)
 })

@@ -2,7 +2,7 @@ import { Router } from "../lib/router.js"
 import { z } from "zod"
 import crypto from "node:crypto"
 import { requireAuth, requireRole, rateLimiter } from "../auth/middleware.js"
-import { query } from "../db.js"
+import { newId, query } from "../db.js"
 import { writeAudit } from "../lib/audit.js"
 import { scopeWhere } from "../lib/scope.js"
 import { analyzeText } from "../lib/classifier.js"
@@ -56,7 +56,7 @@ communitySurveillanceRouter.post("/report", communityApiKey, rateLimiter(20), as
 })
 
 // Get community reports (for verification)
-communitySurveillanceRouter.get("/", requireAuth, requireRole("public_health_analyst", "system_admin"), async (req, res) => {
+communitySurveillanceRouter.get("/", requireAuth, requireRole("public_health_analyst"), async (req, res) => {
   const district = req.query.district as string
   const verified = req.query.verified as string
   const page = Math.max(1, Number(req.query.page) || 1)
@@ -87,7 +87,7 @@ communitySurveillanceRouter.get("/", requireAuth, requireRole("public_health_ana
 })
 
 // Verify community report
-communitySurveillanceRouter.patch("/:reportId/verify", requireAuth, requireRole("public_health_analyst", "system_admin"), async (req, res) => {
+communitySurveillanceRouter.patch("/:reportId/verify", requireAuth, requireRole("public_health_analyst"), async (req, res) => {
   const schema = z.object({
     verified: z.boolean(),
     verificationNotes: z.string().optional(),
@@ -104,7 +104,54 @@ communitySurveillanceRouter.patch("/:reportId/verify", requireAuth, requireRole(
      WHERE report_id = ?`,
     [verified, req.user!.userId, verificationNotes || null, req.params.reportId]
   )
-  
-  await writeAudit(req, { action: "verify_community_report", entityType: "community_reports", entityId: req.params.reportId, details: { verified } })
-  res.json({ ok: true })
+
+  // A verified community report is a real mortality signal — promote it into
+  // the signal registry (already verified, so it lands at verified/triaged).
+  // external_id dedupes repeat verifications of the same report.
+  let promotedSignalId: string | null = null
+  if (verified) {
+    const externalId = `crp:${req.params.reportId}`
+    const [report, dup] = await Promise.all([
+      query<any[]>("SELECT * FROM community_reports WHERE report_id = ?", [req.params.reportId]),
+      query<any[]>("SELECT signal_id FROM health_signals WHERE external_id = ?", [externalId]),
+    ])
+    if (report[0] && !dup.length) {
+      const r = report[0]
+      const typeMap: Record<string, string> = {
+        mortality_spike: "death_cluster",
+        outbreak_suspected: "death_cluster",
+        unusual_disease: "community_alert",
+      }
+      promotedSignalId = newId("sig")
+      await query(
+        `INSERT INTO health_signals
+         (signal_id, external_id, signal_type, title, description, source_channel, district, province, severity, status, workflow_stage, reported_by, sla_due_at, risk_score, classified_topics, sentiment)
+         VALUES (?, ?, ?, ?, ?, 'community', ?, ?, ?, 'triaged', 'verified', ?, NOW() + (? * INTERVAL '1 hour'), ?, ?, ?)`,
+        [
+          promotedSignalId, externalId, typeMap[r.report_type] ?? "community_alert",
+          `Community report: ${r.location_name ?? r.district ?? "unspecified location"}`,
+          r.report_message ?? null, r.district ?? null, r.province ?? null,
+          r.severity ?? "medium", req.user!.userId,
+          r.severity === "critical" ? 24 : 72,
+          r.risk_score ?? null, r.classified_topics ?? null, r.sentiment ?? null,
+        ],
+      )
+      await query(
+        `INSERT INTO signal_workflow_events (event_id, signal_id, to_stage, to_status, actor_id, actor_name, notes)
+         VALUES (?, ?, 'verified', 'triaged', ?, ?, ?)`,
+        [newId("swe"), promotedSignalId, req.user!.userId, req.user!.name,
+         `Promoted from community report ${req.params.reportId}`],
+      )
+      await query(
+        "UPDATE community_reports SET linked_signal_id = ? WHERE report_id = ?",
+        [promotedSignalId, req.params.reportId],
+      )
+      await query("UPDATE community_reports SET linked_signal_id = ? WHERE report_id = ?", [promotedSignalId, req.params.reportId])
+    } else if (dup.length) {
+      promotedSignalId = dup[0].signal_id
+    }
+  }
+
+  await writeAudit(req, { action: "verify_community_report", entityType: "community_reports", entityId: req.params.reportId, details: { verified, promotedSignalId } })
+  res.json({ ok: true, signalId: promotedSignalId })
 })

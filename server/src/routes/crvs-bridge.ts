@@ -7,7 +7,7 @@ import { writeAudit } from "../lib/audit.js"
 export const crvsBridgeRouter = Router()
 
 // Register death with CRVS system
-crvsBridgeRouter.post("/register", requireAuth, requireRole("medical_officer", "mortuary_clerk", "public_health_analyst", "system_admin"), async (req, res) => {
+crvsBridgeRouter.post("/register", requireAuth, requireRole("medical_officer", "mortuary_clerk", "public_health_analyst"), async (req, res) => {
   const schema = z.object({
     notificationId: z.string(),
   })
@@ -40,7 +40,7 @@ crvsBridgeRouter.post("/register", requireAuth, requireRole("medical_officer", "
 })
 
 // Get CRVS integration status
-crvsBridgeRouter.get("/status/:notificationId", requireAuth, requireRole("medical_officer", "mortuary_clerk", "pathologist", "public_health_analyst", "system_admin"), async (req, res) => {
+crvsBridgeRouter.get("/status/:notificationId", requireAuth, requireRole("medical_officer", "mortuary_clerk", "pathologist", "public_health_analyst"), async (req, res) => {
   const bridge = await query<any[]>(
     "SELECT * FROM crvs_bridge WHERE notification_id = ?",
     [req.params.notificationId]

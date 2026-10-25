@@ -5,9 +5,9 @@
 #
 # Example:  sudo bash deploy/setup.sh dds.duckdns.org
 #
-# What it does: Node 22 + pnpm, MariaDB (dds_db + dedicated user), Python venv
-# (analytics + transcription), pnpm install/build, migrate + seed, systemd
-# services, Caddy HTTPS reverse proxy, UFW firewall.
+# What it does: Node 22 + pnpm, PostgreSQL (dds_db + dedicated user), Python
+# venv (analytics + transcription), pnpm install/build, migrate + seed,
+# systemd services, Caddy HTTPS reverse proxy, UFW firewall, nightly pg_dump.
 #
 # Optional env vars (set before running):
 #   GEMINI_API_KEY=...   Gemini key for /api/translate + /api/i18n/fill
@@ -24,7 +24,7 @@ REPO_URL="${REPO_URL:-https://github.com/truevayz52-source/Disease-Detection-Sys
 echo "==> Installing system packages"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
-apt-get install -y -qq curl git mariadb-server python3-venv python3-pip \
+apt-get install -y -qq curl git postgresql python3-venv python3-pip \
   caddy ufw openssl >/dev/null
 
 if ! command -v node >/dev/null; then
@@ -45,29 +45,34 @@ else
   git clone "$REPO_URL" "$APP_DIR" && cd "$APP_DIR"
 fi
 
-echo "==> Configuring MariaDB"
-systemctl enable --now mariadb
+echo "==> Configuring PostgreSQL"
+systemctl enable --now postgresql
 DB_PASS="$(openssl rand -hex 24)"
-mysql -e "CREATE DATABASE IF NOT EXISTS dds_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-          CREATE USER IF NOT EXISTS 'dds'@'localhost' IDENTIFIED BY '${DB_PASS}';
-          GRANT ALL PRIVILEGES ON dds_db.* TO 'dds'@'localhost';
-          FLUSH PRIVILEGES;"
+# Idempotent: create on first run, rotate the password on re-deploys so it
+# always matches server/.env below.
+su postgres -s /bin/sh -c "psql -tAc \"SELECT 1 FROM pg_roles WHERE rolname='dds'\" | grep -q 1" \
+  || su postgres -s /bin/sh -c "psql -c \"CREATE USER dds WITH PASSWORD '${DB_PASS}'\""
+su postgres -s /bin/sh -c "psql -c \"ALTER USER dds WITH PASSWORD '${DB_PASS}'\""
+su postgres -s /bin/sh -c "psql -tAc \"SELECT 1 FROM pg_database WHERE datname='dds_db'\" | grep -q 1" \
+  || su postgres -s /bin/sh -c "createdb -O dds dds_db"
 
 JWT_SECRET="$(openssl rand -hex 48)"
+HMAC_KEY="$(openssl rand -hex 32)"
+COMMUNITY_KEY="$(openssl rand -hex 24)"
 cat > server/.env <<EOF
 PORT=4001
 CLIENT_ORIGIN=https://${DOMAIN}
-MYSQL_HOST=127.0.0.1
-MYSQL_PORT=3306
-MYSQL_USER=dds
-MYSQL_PASSWORD=${DB_PASS}
-MYSQL_DATABASE=dds_db
-MYSQL_TIMEZONE=+02:00
+DATABASE_URL=postgresql://dds:${DB_PASS}@127.0.0.1:5432/dds_db
+DATABASE_SSL=false
+DB_TIMEZONE=Africa/Harare
 JWT_SECRET=${JWT_SECRET}
 JWT_EXPIRES_HOURS=8
+SIGNATURE_HMAC_KEY=${HMAC_KEY}
+COMMUNITY_API_KEY=${COMMUNITY_KEY}
 ANALYTICS_URL=http://127.0.0.1:8000
 WHISPER_URL=http://127.0.0.1:8001/transcribe
 PATHOLOGY_INFERENCE_URL=http://127.0.0.1:8002/analyze
+PATHOLOGY_MODEL=default
 OUTBREAK_THRESHOLD=8
 OUTBREAK_WINDOW_HOURS=48
 TRANSLATE_PROVIDER=gemini
@@ -97,13 +102,15 @@ python3 -m venv "$VENV"
 if [ "${DDS_LIGHT:-0}" != "1" ]; then
   "$VENV/bin/pip" install -q -r analytics/requirements-transcription.txt
   "$VENV/bin/pip" install -q -r analytics/requirements-pathology.txt || true
+  # Download the faster-whisper model once — no downloads at request time.
+  "$VENV/bin/python" analytics/setup_transcription.py || echo "whisper model download skipped"
 fi
 
 echo "==> systemd services"
 cat > /etc/systemd/system/dds-api.service <<'EOF'
 [Unit]
 Description=DDS API
-After=network.target mariadb.service
+After=network.target postgresql.service
 [Service]
 WorkingDirectory=/opt/dds/server
 ExecStart=/usr/bin/node dist/index.js
@@ -147,6 +154,15 @@ systemctl daemon-reload
 systemctl enable --now dds-api dds-analytics
 systemctl enable --now dds-transcription 2>/dev/null || true
 
+echo "==> Nightly database backup"
+install -d -m 700 /var/backups/dds
+cat > /etc/cron.daily/dds-backup <<'EOF'
+#!/bin/sh
+su postgres -s /bin/sh -c "pg_dump dds_db" | gzip > "/var/backups/dds/dds_db-$(date +%F).sql.gz"
+find /var/backups/dds -name 'dds_db-*.sql.gz' -mtime +14 -delete
+EOF
+chmod 700 /etc/cron.daily/dds-backup
+
 echo "==> Caddy reverse proxy + HTTPS"
 cat > /etc/caddy/Caddyfile <<EOF
 ${DOMAIN} {
@@ -183,6 +199,10 @@ cat <<DONE
 API health:   curl https://${DOMAIN}/api/health
 Web client:   https://${DOMAIN}
 Demo login:   seed script credentials (see server/scripts/seed.ts)
+DB backups:   /var/backups/dds (nightly pg_dump, 14-day retention)
+
+NOTE: server/uploads/ (specimen images, evidence files) is NOT included in
+the pg_dump backups — back it up separately or move it to object storage.
 
 Phone APK: rebuild once with the stable URL:
   cd C:\\dds\\mob2

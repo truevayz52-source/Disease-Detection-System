@@ -7,7 +7,7 @@ import { writeAudit } from "../lib/audit.js"
 export const emergencyDispatchRouter = Router()
 
 // Send emergency notifications via multiple channels
-emergencyDispatchRouter.post("/send", requireAuth, requireRole("public_health_analyst", "system_admin"), async (req, res) => {
+emergencyDispatchRouter.post("/send", requireAuth, requireRole("public_health_analyst"), async (req, res) => {
   const schema = z.object({
     alertId: z.string().optional(),
     recipients: z.array(z.string()), // User IDs
@@ -74,7 +74,7 @@ emergencyDispatchRouter.post("/send", requireAuth, requireRole("public_health_an
 })
 
 // Get rapid response team members
-emergencyDispatchRouter.get("/rrt-members", requireAuth, requireRole("public_health_analyst", "system_admin"), async (req, res) => {
+emergencyDispatchRouter.get("/rrt-members", requireAuth, requireRole("public_health_analyst"), async (req, res) => {
   const district = req.query.district as string
   
   let queryStr = `SELECT user_id, full_name, email, phone, role, facility_id FROM users WHERE status = 'active'`
@@ -92,7 +92,7 @@ emergencyDispatchRouter.get("/rrt-members", requireAuth, requireRole("public_hea
 })
 
 // Get dispatch history
-emergencyDispatchRouter.get("/history", requireAuth, requireRole("public_health_analyst", "system_admin"), async (req, res) => {
+emergencyDispatchRouter.get("/history", requireAuth, requireRole("public_health_analyst"), async (req, res) => {
   const history = await query<any[]>(
     `SELECT notification_id, user_id, notification_type, title, created_at, is_read
      FROM user_notifications

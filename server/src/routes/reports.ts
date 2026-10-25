@@ -4,7 +4,7 @@ import { query,newId } from "../db.js"
 import { z } from "zod"
 import { writeAudit } from "../lib/audit.js"
 export const reportsRouter=Router()
-reportsRouter.use(requireAuth,requireRole("public_health_analyst","system_admin","executive"))
+reportsRouter.use(requireAuth,requireRole("public_health_analyst","executive"))
 reportsRouter.get("/available",(_req,res)=>res.json({items:[{id:"mortality",name:"District mortality summary"}],formats:["csv","json"]}))
 reportsRouter.get("/scheduled",async(req,res)=>res.json({items:await query("SELECT * FROM scheduled_reports WHERE created_by=? ORDER BY created_at DESC",[req.user!.userId])}))
 reportsRouter.post("/schedule",async(req,res)=>{
@@ -37,7 +37,7 @@ export function csvCell(value: unknown) {
 }
 reportsRouter.post("/generate",async(req,res)=>{
   const d=z.object({format:z.enum(["csv","json"]),days:z.number().int().min(1).max(366).default(30)}).parse(req.body)
-  const rows=await query<any[]>("SELECT f.district,ic.disease_category,COUNT(*) AS deaths,SUM(dn.is_maternal_perinatal) AS maternal_perinatal FROM death_notifications dn JOIN facilities f ON f.facility_id=dn.facility_id JOIN icd_codes ic ON ic.icd_code=dn.preliminary_icd_code WHERE dn.date_of_death>=DATE_SUB(NOW(),INTERVAL ? DAY) GROUP BY f.district,ic.disease_category ORDER BY f.district",[d.days])
+  const rows=await query<any[]>("SELECT f.district,ic.disease_category,COUNT(*) AS deaths,COUNT(*) FILTER (WHERE dn.is_maternal_perinatal) AS maternal_perinatal FROM death_notifications dn JOIN facilities f ON f.facility_id=dn.facility_id JOIN icd_codes ic ON ic.icd_code=dn.preliminary_icd_code WHERE dn.status<>'rejected' AND dn.date_of_death>=NOW()-(?*INTERVAL '1 day') GROUP BY f.district,ic.disease_category ORDER BY f.district",[d.days])
   await writeAudit(req,{action:"export_report",entityType:"reports",details:{format:d.format,days:d.days,rows:rows.length}})
   res.setHeader("Cache-Control","no-store")
   res.setHeader("Content-Disposition",`attachment; filename="dds-mortality.${d.format}"`)

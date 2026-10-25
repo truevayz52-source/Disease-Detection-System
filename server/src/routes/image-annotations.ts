@@ -7,7 +7,7 @@ import { writeAudit } from "../lib/audit.js"
 export const imageAnnotationRouter = Router()
 
 // Add annotation to image
-imageAnnotationRouter.post("/", requireAuth, requireRole("pathologist", "medical_officer", "public_health_analyst", "system_admin"), async (req, res) => {
+imageAnnotationRouter.post("/", requireAuth, requireRole("pathologist", "medical_officer", "public_health_analyst"), async (req, res) => {
   const schema = z.object({
     imageId: z.string(),
     annotationType: z.enum(["marker", "measurement", "text", "voice"]),
@@ -32,7 +32,7 @@ imageAnnotationRouter.post("/", requireAuth, requireRole("pathologist", "medical
 })
 
 // Get annotations for image
-imageAnnotationRouter.get("/:imageId", requireAuth, requireRole("pathologist", "medical_officer", "public_health_analyst", "system_admin"), async (req, res) => {
+imageAnnotationRouter.get("/:imageId", requireAuth, requireRole("pathologist", "medical_officer", "public_health_analyst"), async (req, res) => {
   const annotations = await query<any[]>(
     `SELECT ia.*, u.full_name as annotator_name
      FROM image_annotations ia

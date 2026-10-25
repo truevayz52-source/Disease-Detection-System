@@ -12,7 +12,7 @@ try {
     if(!row)continue
     const [exists]=await query<any[]>("SELECT user_id FROM users WHERE email=?",[email])
     if(exists)throw Error(`Cannot migrate ${oldEmail}: target email already exists`)
-    await query("INSERT IGNORE INTO email_aliases (email,user_id,expires_at) VALUES (?,?,DATE_ADD(NOW(),INTERVAL 30 DAY))",[oldEmail,row.user_id])
+    await query("INSERT INTO email_aliases (email,user_id,expires_at) VALUES (?,?,NOW()+INTERVAL '30 days') ON CONFLICT DO NOTHING",[oldEmail,row.user_id])
     await query("UPDATE users SET email=? WHERE user_id=?",[email,row.user_id])
     console.log(`Migrated demo address to ${email}`)
   }
