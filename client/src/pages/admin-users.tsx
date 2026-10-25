@@ -195,7 +195,11 @@ export default function AdminUsersPage() {const{t}=usePreferences();
               </div>
               <div className="space-y-2">
                 <Label>{t("Facility (optional)")}</Label>
-                <Select value={form.facilityId} onValueChange={(v) => setForm({ ...form, facilityId: v ?? "" })}>
+                <Select
+                  value={form.facilityId}
+                  onValueChange={(v) => setForm({ ...form, facilityId: v ?? "" })}
+                  items={Object.fromEntries((facilities?.items ?? []).map((f) => [f.facility_id, f.facility_name]))}
+                >
                   <SelectTrigger><SelectValue placeholder={t("None")} /></SelectTrigger>
                   <SelectContent>
                     {(facilities?.items ?? []).map((f) => (

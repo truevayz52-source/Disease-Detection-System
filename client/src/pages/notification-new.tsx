@@ -269,7 +269,11 @@ export default function NotificationNewPage() {const{t}=usePreferences();
             <CardContent className="grid gap-4">
               <div className="space-y-2">
                 <Label htmlFor="facility">{t("Reporting facility *")}</Label>
-                <Select value={form.facilityId} onValueChange={(v) => set("facilityId", v ?? "")}>
+                <Select
+                  value={form.facilityId}
+                  onValueChange={(v) => set("facilityId", v ?? "")}
+                  items={Object.fromEntries((facilities?.items ?? []).map((f) => [f.facility_id, `${f.facility_name} — ${f.district}`]))}
+                >
                   <SelectTrigger id="facility"><SelectValue placeholder={t("Select facility")} /></SelectTrigger>
                   <SelectContent>
                     {(facilities?.items ?? []).map((f) => (
