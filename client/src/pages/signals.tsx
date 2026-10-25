@@ -358,12 +358,15 @@ export default function SignalRegistryPage() {const{t}=usePreferences();
             </div>
             <div className="space-y-2">
               <Label>{t("Facility (if known)")}</Label>
-              <Select
-                value={form.facilityId}
-                onValueChange={(v) => pickFacility(v ?? "")}
-                items={Object.fromEntries((facilities?.items ?? []).map((f) => [f.facility_id, `${f.facility_name} — ${f.district}`]))}
-              >
-                <SelectTrigger><SelectValue placeholder={t("Select facility")} /></SelectTrigger>
+              <Select value={form.facilityId} onValueChange={(v) => pickFacility(v ?? "")}>
+                <SelectTrigger>
+                  <SelectValue placeholder={t("Select facility")}>
+                    {(v: string) => {
+                      const f = facilities?.items.find((x) => x.facility_id === v)
+                      return f ? `${f.facility_name} — ${f.district}` : v
+                    }}
+                  </SelectValue>
+                </SelectTrigger>
                 <SelectContent>
                   {(facilities?.items ?? [])
                     .filter((f) => !form.district || f.district.toLowerCase() === form.district.toLowerCase() || f.province.toLowerCase() === form.province.toLowerCase())
