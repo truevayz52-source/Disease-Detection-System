@@ -677,14 +677,14 @@ analyticsRouter.post(
     const errors: string[] = []
     for (const [i, input] of notifications.entries()) {
       try {
-        await createNotification(req, input)
+        await createNotification(req, input, { notify: false })
         imported++
       } catch (e) {
         const msg = e instanceof Error ? e.message : "unknown"
         errors.push(`Row ${i}: ${msg}`)
       }
     }
-    const created = await detectOutbreaks().catch(() => [])
+    const created = await detectOutbreaks(undefined, false).catch(() => [])
     await writeAudit(req, { action: "bulk_ingest", entityType: "death_notifications", details: { imported, errors: errors.length, alerts: created.length } })
     res.json({ imported, errors, alertsCreated: created.length })
   },
@@ -793,14 +793,14 @@ analyticsRouter.post(
         isMaternalPerinatal: ["true", "1", "yes", "y"].includes(get(row, "is_maternal_perinatal", "ismaternalperinatal", "maternal").toLowerCase()),
       }
       try {
-        await createNotification(req, payload as any)
+        await createNotification(req, payload as any, { notify: false })
         imported++
       } catch (e) {
         const msg = e instanceof Error ? e.message : "unknown"
         errors.push(`Row ${r}: ${msg}`)
       }
     }
-    const created = await detectOutbreaks().catch(() => [])
+    const created = await detectOutbreaks(undefined, false).catch(() => [])
     await writeAudit(req, { action: "csv_ingest", entityType: "death_notifications", details: { imported, errors: errors.length, alerts: created.length } })
     res.json({ imported, errors, alertsCreated: created.length })
   },
@@ -868,7 +868,7 @@ analyticsRouter.post(
           isMaternalPerinatal: ["Maternal", "Perinatal"].includes(category),
         }
         try {
-          await createNotification(req, payload as any)
+          await createNotification(req, payload as any, { notify: false })
           imported++
         } catch (e) {
           const msg = e instanceof Error ? e.message : "unknown"
@@ -877,7 +877,7 @@ analyticsRouter.post(
         }
       }
     }
-    const created = await detectOutbreaks().catch(() => [])
+    const created = await detectOutbreaks(undefined, false).catch(() => [])
     await writeAudit(req, { action: "dhis2_ingest", entityType: "death_notifications", details: { imported, errors: errors.length, alerts: created.length, period } })
     res.json({ imported, errors, alertsCreated: created.length, period })
   },

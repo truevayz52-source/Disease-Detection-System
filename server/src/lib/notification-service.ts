@@ -2,6 +2,7 @@ import crypto from "node:crypto"
 import { z } from "zod"
 import type { Request } from "express"
 import { getPool, newId } from "../db.js"
+import { config } from "../config.js"
 import { facilityScoped } from "./access.js"
 import { writeAudit } from "./audit.js"
 import { reviewSlaHours } from "./case-workflow.js"
@@ -15,7 +16,7 @@ export const notificationSchema=z.object({
   facilityId:z.string().min(1).max(36),dateOfDeath:z.string().refine(v=>Number.isFinite(Date.parse(v)) && Date.parse(v)<=Date.now(),"Invalid or future date of death"),preliminaryIcdCode:z.string().min(1).max(12),clinicalSummary:z.string().max(8000).nullable().optional(),isMaternalPerinatal:z.boolean().default(false)
 })
 export function httpError(status: number,message: string) { return Object.assign(new Error(message),{status}) }
-export async function createNotification(req: Request, input: unknown) {
+export async function createNotification(req: Request, input: unknown, opts: { notify?: boolean } = {}) {
   const d=notificationSchema.parse(input), user=req.user!
   if(!["medical_officer","mortuary_clerk","public_health_analyst","system_admin"].includes(user.role))throw httpError(403,"Forbidden")
   if(facilityScoped(user)&&!user.facilityId)throw httpError(403,"No facility assigned")
@@ -49,6 +50,6 @@ export async function createNotification(req: Request, input: unknown) {
   } catch(error) {await conn.rollback();throw error} finally {conn.release()}
   await writeAudit(req,{action:"create_death_notification",entityType:"death_notifications",entityId:notificationId,details:{patientId,facilityId}})
   const mpdsrAlertId=d.isMaternalPerinatal?await checkMpdsr(notificationId):null
-  const alertsCreated=await detectOutbreaksCoalesced().catch(()=>[])
+  const alertsCreated=await detectOutbreaksCoalesced(config.outbreakWindowHours, opts.notify ?? true).catch(()=>[])
   return {notificationId,patientId,mpdsrAlertId,alertsCreated}
 }

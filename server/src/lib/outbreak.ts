@@ -12,7 +12,7 @@ import { emailConfigured, sendEmail } from "./email.js"
  * This is the always-on fallback for the Python ML service — the system keeps
  * detecting outbreaks even when analytics/ is offline (Ch 5.3 resilience).
  */
-export async function detectOutbreaks(windowHours = config.outbreakWindowHours) {
+export async function detectOutbreaks(windowHours = config.outbreakWindowHours, notify = true) {
   const rules = await query<any[]>("SELECT * FROM alert_thresholds WHERE is_active ORDER BY created_at DESC")
   const clusters: any[] = []
   for (const rule of [...rules, { district: null, disease_category: null, case_threshold: config.outbreakThreshold, time_window_hours: windowHours, default: true }]) {
@@ -78,11 +78,13 @@ export async function detectOutbreaks(windowHours = config.outbreakWindowHours) 
       ],
     )
     created.push({ alertId, district: c.district, category: c.category, caseCount: c.case_count, riskScore })
-    const recipients = await query<any[]>("SELECT user_id, email FROM users WHERE status='active' AND role IN ('public_health_analyst','system_admin','executive')")
-    for (const recipient of recipients) {
-      await notifyUser(recipient.user_id,"Outbreak threshold reached",`${c.district}: ${c.case_count} reported deaths in ${c.category}.`,"/alerts","outbreak")
-      if (recipient.email && emailConfigured()) {
-        void sendEmail(recipient.email, "DDS outbreak alert", `${c.district}: ${c.case_count} reported deaths in ${c.category}. Open the dashboard for details.`).catch(() => {})
+    if (notify) {
+      const recipients = await query<any[]>("SELECT user_id, email FROM users WHERE status='active' AND role IN ('public_health_analyst','system_admin','executive')")
+      for (const recipient of recipients) {
+        await notifyUser(recipient.user_id,"Outbreak threshold reached",`${c.district}: ${c.case_count} reported deaths in ${c.category}.`,"/alerts","outbreak")
+        if (recipient.email && emailConfigured()) {
+          void sendEmail(recipient.email, "DDS outbreak alert", `${c.district}: ${c.case_count} reported deaths in ${c.category}. Open the dashboard for details.`).catch(() => {})
+        }
       }
     }
   }
@@ -172,10 +174,12 @@ export async function detectOutbreaks(windowHours = config.outbreakWindowHours) 
       ],
     )
     created.push({ alertId, district: c.district, category: c.category, caseCount: c.total, riskScore: config.earlyWarningRiskScore, earlyWarning: true })
-    for (const recipient of ewRecipients) {
-      await notifyUser(recipient.user_id, "Early warning raised", `${c.district}: ${c.total} reported death(s) in ${c.category} (${detection}).`, "/alerts", "outbreak")
-      if (recipient.email && emailConfigured()) {
-        void sendEmail(recipient.email, "DDS early warning", `${c.district}: ${c.total} reported death(s) in ${c.category} (${detection}). Open the dashboard for details.`).catch(() => {})
+    if (notify) {
+      for (const recipient of ewRecipients) {
+        await notifyUser(recipient.user_id, "Early warning raised", `${c.district}: ${c.total} reported death(s) in ${c.category} (${detection}).`, "/alerts", "outbreak")
+        if (recipient.email && emailConfigured()) {
+          void sendEmail(recipient.email, "DDS early warning", `${c.district}: ${c.total} reported death(s) in ${c.category} (${detection}). Open the dashboard for details.`).catch(() => {})
+        }
       }
     }
   }
@@ -191,16 +195,16 @@ export async function detectOutbreaks(windowHours = config.outbreakWindowHours) 
  */
 let outbreakCooldownUntil = 0
 let outbreakTimer: ReturnType<typeof setTimeout> | null = null
-export function detectOutbreaksCoalesced(windowHours = config.outbreakWindowHours) {
+export function detectOutbreaksCoalesced(windowHours = config.outbreakWindowHours, notify = true) {
   const now = Date.now()
   if (now >= outbreakCooldownUntil) {
     outbreakCooldownUntil = now + 2000
-    return detectOutbreaks(windowHours)
+    return detectOutbreaks(windowHours, notify)
   }
   if (!outbreakTimer) {
     outbreakTimer = setTimeout(() => {
       outbreakTimer = null
-      void detectOutbreaks().catch(() => [])
+      void detectOutbreaks(config.outbreakWindowHours, notify).catch(() => [])
     }, Math.max(0, outbreakCooldownUntil - now))
     outbreakTimer.unref()
   }
