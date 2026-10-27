@@ -10,7 +10,7 @@ import '../../ui/theme.dart';
 import '../../ui/widgets.dart';
 
 /// Outbreak map — port of client/src/pages/analytics-map.tsx.
-/// OSM tiles + facility ring markers + category-coloured case dots with
+/// Esri tiles + facility ring markers + category-coloured case dots with
 /// the same toggle/legend controls as the web page.
 class OutbreakMapScreen extends StatefulWidget {
   const OutbreakMapScreen({super.key});
@@ -126,8 +126,14 @@ class _OutbreakMapScreenState extends State<OutbreakMapScreen> {
                     children: [
                       TileLayer(
                         urlTemplate:
-                            'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                        userAgentPackageName: 'zw.gov.mohcc.dds',
+                            'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+                        userAgentPackageName: 'zw.org.mohcc.dds_mobile',
+                      ),
+                      const SimpleAttributionWidget(
+                        source: Text(
+                          'Esri, TomTom, Garmin, FAO, NOAA, USGS · © OpenStreetMap contributors',
+                          style: TextStyle(fontSize: 10),
+                        ),
                       ),
                       if (_showFacilities)
                         CircleLayer(

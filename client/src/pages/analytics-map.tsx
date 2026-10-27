@@ -42,7 +42,8 @@ const CATEGORY_COLORS = [
   "#65a30d",
 ]
 
-export default function AnalyticsMapPage() {const{t}=usePreferences();
+export default function AnalyticsMapPage() {const{t,theme}=usePreferences();
+const darkTiles = theme === "dark" || (theme === "system" && matchMedia("(prefers-color-scheme: dark)").matches)
   const { data } = useSWR<GeoData>("/analytics/geo", (u: string) => api(u))
   const [showCases, setShowCases] = useState(true)
   const [showFacilities, setShowFacilities] = useState(true)
@@ -112,8 +113,10 @@ export default function AnalyticsMapPage() {const{t}=usePreferences();
         <div className="min-h-[70vh] flex-1 overflow-hidden rounded-lg border">
           <MapContainer center={[-19.0, 29.8]} zoom={6} className="h-full w-full" style={{ minHeight: "70vh" }}>
             <TileLayer
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">{t("OpenStreetMap")}</a>'
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              attribution='Tiles &copy; <a href="https://www.esri.com/">Esri</a> &middot; Source: Esri, TomTom, Garmin, FAO, NOAA, USGS &middot; &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+              url={darkTiles
+                ? "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}"
+                : "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}"}
             />
             {showFacilities &&
               (data?.facilities ?? []).map((f) => (
@@ -121,7 +124,7 @@ export default function AnalyticsMapPage() {const{t}=usePreferences();
                   key={f.facility_id}
                   center={[Number(f.latitude), Number(f.longitude)]}
                   radius={9}
-                  pathOptions={{ color: ")#0f172a", weight: 1.5, fillColor: "#f8fafc", fillOpacity: 0.9 }}
+                  pathOptions={{ color: "#0f172a", weight: 1.5, fillColor: "#f8fafc", fillOpacity: 0.9 }}
                 >
                   <LeafletTooltip direction="top" permanent={false}>
                     <strong>{f.facility_name}</strong>
