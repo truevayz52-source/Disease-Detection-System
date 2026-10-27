@@ -58,8 +58,13 @@
      --dart-define DDS_API_URL=https://dds-mohcc.duckdns.org/api
    ```
 
-   Or skip the rebuild: the sign-in screen gear / "Find automatically" lets the
-   app set the server URL at runtime.
+   If the APK also bakes `DDS_LOOKUP_URL` (the GitHub `tunnel-pointer` raw
+   file used by the ngrok workflow), republish that pointer to the droplet
+   URL or drop the define — a live pointer outranks `DDS_API_URL` in the
+   resolver, so a stale laptop/ngrok address would shadow the droplet.
+
+   Or skip the rebuild: the sign-in screen gear / "Find automatically" lets
+   the app set the server URL at runtime.
 
 ## Re-deploying updates
 

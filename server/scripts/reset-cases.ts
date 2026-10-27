@@ -34,6 +34,7 @@ const TRANSACTIONAL_TABLES = [
   "death_notifications",
   "patients",
   "outbreak_alerts",
+  "morbidity_reports",
   "community_reports",
   "health_signals",
   "signal_workflow_events",

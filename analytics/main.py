@@ -203,9 +203,10 @@ def forecast_batch(req: BatchForecastRequest):
 @app.post("/cusum", response_model=dict)
 def cusum(req: CusumRequest):
     # Poisson CUSUM early-warning check (Ch 5.5 — low-volume surveillance).
-    # Baseline = mean of all days except the last two (the surveillance tail);
-    # a rising S over that tail beyond h flags a persistent low-volume anomaly
-    # that density thresholds like '8 cases/48h' would miss.
+    # Baseline = mean of all days except the last two (the surveillance tail).
+    # Standard one-sided CUSUM with reset: S accumulates (x - baseline - k)
+    # over the WHOLE series, so a slow multi-day rise flags too — the previous
+    # 2-day-only accumulation could only ever see a short spike.
     anomalies: List[dict] = []
     for s in req.series:
         counts = [float(c) for c in s.counts]
@@ -213,16 +214,19 @@ def cusum(req: CusumRequest):
             continue
         baseline = float(np.mean(counts[:-2]))
         recent = float(sum(counts[-2:]))
-        k = baseline * 0.5 if baseline > 0 else 0.5
+        # k = allowance above the expected level before a day counts against S.
+        k = max(0.5, baseline * 0.5)
         h = max(2.0, req.limit * float(np.sqrt(max(baseline, 1.0))))
         c = 0.0
-        for v in counts[-2:]:
-            c = max(0.0, c + v - k)
-        if c > h:
+        peak = 0.0
+        for v in counts:
+            c = max(0.0, c + v - baseline - k)
+            peak = max(peak, c)
+        if peak > h:
             anomalies.append({
                 "district": s.district,
                 "category": s.category,
-                "cusum": round(c, 3),
+                "cusum": round(peak, 3),
                 "baseline": round(baseline, 3),
                 "recent": recent,
             })

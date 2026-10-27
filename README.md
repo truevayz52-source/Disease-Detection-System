@@ -8,8 +8,8 @@ autopsy certification, outbreak analytics and GIS mapping.
 ## Architecture
 
 ```
-client/      React 19 SPA (Vite, Tailwind, shadcn/base-ui)      → http://localhost:5173
-server/      Express + TypeScript REST API (JWT, Argon2, RBAC)  → http://localhost:4000
+client/      React 19 SPA (Vite, Tailwind, shadcn/base-ui)      → http://localhost:5174
+server/      Express + TypeScript REST API (JWT, Argon2, RBAC)  → http://localhost:4001
 analytics/   FastAPI ML service (scikit-learn DBSCAN + LR)      → http://localhost:8000
 mobile/      Flutter app (Android/iOS/Windows) — same REST API
 db/          legacy MariaDB/MySQL schema (source of the port)
@@ -33,8 +33,12 @@ Profile → Security & connection) opens a server sheet with manual entry and
 **Find automatically** — it listens for the API's UDP discovery beacon (port
 40401, `DISCOVERY_BEACON=0` disables) and scans the local subnet. The last
 working address is remembered per device; `DDS_PUBLIC_URL` can be baked in
-as a fixed public endpoint. Biometric sign-in (fingerprint/Face ID) unlocks
-the device-activated offline account and validates the session live when
+as a fixed public endpoint. For phones that roam across networks (mobile
+data included), bake in `DDS_LOOKUP_URL` pointing at a small JSON record
+holding the current public URL — this repo uses the `tunnel-pointer` GitHub
+branch, republished with the stable ngrok domain on every stack boot (see
+`deploy/`). Biometric sign-in (fingerprint/Face ID) unlocks the
+device-activated offline account and validates the session live when
 online — enable it via the post-login prompt or Profile → Security.
 
 The Vite dev server proxies `/api/*` to the Express API on :4001. The API calls
@@ -97,11 +101,11 @@ C:\dds-venv\Scripts\python -m uvicorn transcription:app --port 8001 --app-dir an
 # or: pnpm dev:transcription
 
 # 6. Run everything
-pnpm dev            # API :4000 + SPA :5173 (concurrently)
+pnpm dev            # API :4001 + SPA :5174 (concurrently)
 pnpm dev:analytics  # ML service :8000 (separate terminal)
 ```
 
-Open http://localhost:5173 and sign in.
+Open http://localhost:5174 and sign in.
 
 ### Demo accounts (all use password `password123`)
 
@@ -121,8 +125,8 @@ visible immediately on the Alerts / Analytics / Map pages.
 ## Environment variables (`server/.env`)
 
 ```env
-PORT=4000
-CLIENT_ORIGIN=http://localhost:5173
+PORT=4001
+CLIENT_ORIGIN=http://localhost:5174
 DATABASE_URL=postgresql://postgres.<ref>:<password>@aws-0-<region>.pooler.supabase.com:6543/postgres
 #   Supabase Supavisor pooler URI (port 6543), or local: postgresql://postgres:postgres@127.0.0.1:5432/dds_db
 DATABASE_SSL=true              # required for Supabase; false only for local dev
@@ -135,6 +139,17 @@ SIGNATURE_HMAC_KEY=<64 hex chars>  # HMAC for autopsy/certification report signi
 ANALYTICS_URL=http://127.0.0.1:8000
 OUTBREAK_THRESHOLD=8
 OUTBREAK_WINDOW_HOURS=48
+EARLY_WARNING_MIN_CASES=2      # notifiable-disease floor for early-warning alerts
+EARLY_WARNING_WINDOW_HOURS=2160
+EARLY_WARNING_RISK_SCORE=35
+CUSUM_LIMIT=3                  # Poisson CUSUM decision-limit multiplier
+SIGNAL_MIN_REPORTS=3           # community signals/reports per district that raise an alert
+SIGNAL_WINDOW_HOURS=72         # aggregation window for the community-signal pass
+SIGNAL_RISK_SCORE=45
+ALERT_AUTO_RESOLVE_HOURS=336   # stale outbreak/early_warning alerts auto-resolve so second waves re-alert
+MORBIDITY_MIN_CASES=10         # pooled case count per district+category that raises a morbidity alert
+MORBIDITY_WINDOW_HOURS=168     # aggregation window for the syndromic pass
+MORBIDITY_RISK_SCORE=50
 DB_TIMEZONE=Africa/Harare      # session TZ pinned per pooled connection
 COMMUNITY_API_KEY=             # optional x-api-key gate on /api/community/report
 WHISPER_URL=http://127.0.0.1:8001/transcribe   # batch transcription
@@ -220,6 +235,8 @@ All endpoints are under `/api`. Every request except `/auth/login` requires
 | Tele-pathology | `POST/GET /notifications/:id/images`, `GET /images/:id/file` |
 | Autopsies | `GET /autopsies`, `GET /autopsies/:id`, `GET /autopsies/:id/verify`, `PATCH /autopsies/:id/finalize` |
 | Alerts | `GET /alerts`, `GET /alerts/active-count`, `PATCH /alerts/:id/resolve` |
+| Morbidity | `POST /morbidity` (single or `{reports:[…]}` batch), `GET /morbidity` — syndromic case counts feeding pre-mortality detection |
+| FHIR | `GET /fhir/metadata|Observation|Patient|Bundle`, `POST /fhir/Observation`, `POST /fhir/Bundle` — inbound syndromic feeds land in `morbidity_reports` |
 | Analytics | `GET /analytics/summary|trends|geo|clusters`, `POST /analytics/detect`, `GET /analytics/engine-status` |
 | Admin | `GET/POST /users`, `PATCH /users/:id`, `GET /audit`, `GET /audit/verify` |
 | Certificate | `GET /notifications/:id/certificate` (printable HTML → PDF via browser print) |

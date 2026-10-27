@@ -1,0 +1,157 @@
+<!doctype html><html><head><meta charset="utf-8"><title>DDS — System Overview</title>
+<style>
+@page { margin: 2cm 1.9cm; }
+body { font-family: Georgia, "Times New Roman", serif; font-size: 10.5pt; line-height: 1.5; color: #1a1a1a; max-width: 760px; margin: 0 auto; }
+h1 { font-family: "Segoe UI", Arial, sans-serif; font-size: 22pt; color: #14532d; margin: 0 0 2px; }
+h2 { font-family: "Segoe UI", Arial, sans-serif; font-size: 13.5pt; color: #166534; border-bottom: 2px solid #bbf7d0; padding-bottom: 3px; margin: 22px 0 8px; }
+h3 { font-family: "Segoe UI", Arial, sans-serif; font-size: 11pt; color: #15803d; margin: 14px 0 4px; }
+.sub { font-family: "Segoe UI", Arial, sans-serif; font-size: 10pt; color: #555; }
+header { border-bottom: 3px solid #166534; padding-bottom: 14px; margin-bottom: 18px; }
+table { border-collapse: collapse; width: 100%; margin: 8px 0; font-size: 9.5pt; }
+th { background: #f0fdf4; color: #14532d; font-family: "Segoe UI", Arial, sans-serif; }
+th, td { border: 1px solid #d1d5db; padding: 5px 8px; text-align: left; vertical-align: top; }
+code { font-family: Consolas, monospace; font-size: 9pt; background: #f1f5f9; padding: 0 3px; border-radius: 3px; }
+.box { background: #f0fdf4; border-left: 4px solid #16a34a; padding: 10px 14px; margin: 10px 0; border-radius: 4px; }
+.warn { background: #fffbeb; border-left: 4px solid #d97706; }
+ol.passes { counter-reset: p; padding-left: 0; list-style: none; }
+ol.passes > li { margin: 8px 0; padding: 8px 12px; background: #f8fafc; border-left: 4px solid #0ea5e9; border-radius: 4px; }
+.small { font-size: 9pt; color: #555; }
+footer { margin-top: 26px; padding-top: 10px; border-top: 1px solid #ccc; font-family: "Segoe UI", Arial, sans-serif; font-size: 8.5pt; color: #777; }
+</style></head><body>
+<header>
+<h1>Disease Detection System (DDS)</h1>
+<div class="sub">Forensic Mortality Surveillance &amp; Outbreak Early-Warning Platform — System Overview · MOHCC Zimbabwe</div>
+</header>
+
+<h2>1. What the system is</h2>
+<p>DDS is a <b>real-time forensic mortality surveillance platform</b>. When a death occurs, the
+information about that death exists immediately — but traditionally it takes days or weeks to become
+<em>intelligence</em> for district and national epidemiologists. DDS closes that gap: it captures death
+notifications at the facility, verifies causes of death through autopsy and medical certification, and
+continuously scans the data — <b>plus pre-mortality feeds</b> — for outbreak patterns, pushing alerts to
+public health officials within minutes.</p>
+
+<div class="box"><b>Three questions the system answers:</b><br>
+① How many deaths are coming? <i>(forecasting)</i> &nbsp;
+② Is something abnormal happening right now? <i>(five-pass detection)</i> &nbsp;
+③ What is killing people? <i>(cause-of-death analytics)</i></div>
+
+<h2>2. Architecture at a glance</h2>
+<table>
+<tr><th>Layer</th><th>Technology</th><th>Role</th></tr>
+<tr><td><b>Web client</b></td><td>React + TypeScript + Vite</td><td>Facility officers, analysts, pathologists, executives — dashboards, intake, review, alerts, maps</td></tr>
+<tr><td><b>Mobile app</b></td><td>Flutter (offline-first)</td><td>Field capture with AES-256 encrypted queue; biometric sign-in; auto server discovery</td></tr>
+<tr><td><b>API server</b></td><td>Node.js + Express (port 4001)</td><td>REST API, JWT sessions, RBAC + facility scoping, websocket alerts, scheduled reports, serves built web client</td></tr>
+<tr><td><b>Database</b></td><td>PostgreSQL (Supabase)</td><td>All case + reference data; hash-chained immutable audit log</td></tr>
+<tr><td><b>Analytics</b></td><td>Python FastAPI :8000</td><td>scikit-learn: DBSCAN spatial clustering, forecasting, Poisson CUSUM — Node fallback if down</td></tr>
+<tr><td><b>Transcription</b></td><td>faster-whisper :8001</td><td>Verbal-autopsy audio → text (local, no cloud)</td></tr>
+<tr><td><b>Pathology AI</b></td><td>Python :8002 (optional)</td><td>Specimen image anomaly scoring for pathologists</td></tr>
+<tr><td><b>Tunnels</b></td><td>ngrok + cloudflared</td><td>Public reachability; stable ngrok domain published to Firebase + GitHub pointers for mobile</td></tr>
+</table>
+
+<h2>3. The case lifecycle</h2>
+<ol>
+<li><b>Intake</b> — a medical officer enters a death notification (ICD-10 coded at capture), web or mobile
+(including offline, syncing later via the encrypted queue).</li>
+<li><b>Review</b> — status flow is governed by <code>case-workflow.ts</code>: pending_review → under_review →
+certified/finalized or rejected, each transition via a dedicated action endpoint (/certify, /reject, /autopsy, /assign).</li>
+<li><b>Verification</b> — natural deaths are certified by a medical officer (HMAC-signed certificate);
+medico-legal deaths go to a pathologist (autopsy report, tele-pathology images, digital signature).</li>
+<li><b>Detection</b> — every notification triggers the coalesced outbreak engine; a scheduled sweep also runs
+every 8 minutes.</li>
+<li><b>Response</b> — alerts push to the bell (websocket), email when SMTP is configured, and appear on
+Alerts / Map / Analytics pages. Signals can escalate into case investigations; playbooks guide response.</li>
+</ol>
+
+<h2>4. The five-pass detection engine</h2>
+<p><code>detectOutbreaks()</code> in <code>server/src/lib/outbreak.ts</code> runs on every notification intake
+(coalesced) and every 8 minutes. Each pass is independent; alerts dedupe per district+category.</p>
+<ol class="passes">
+<li><b>Stale-alert expiry</b> — outbreak/early-warning alerts older than <code>ALERT_AUTO_RESOLVE_HOURS</code>
+(336h) auto-resolve so a second wave in the same district re-alerts. MPDSR alerts never auto-resolve.</li>
+<li><b>Threshold clusters</b> — ≥ <code>OUTBREAK_THRESHOLD</code> (8) deaths in a district+category inside
+<code>OUTBREAK_WINDOW_HOURS</code>. Window uses <code>GREATEST(date_of_death, created_at)</code> so late data
+entry can't hide a cluster. Cause precedence: autopsy → medical certification → preliminary ICD.</li>
+<li><b>Low-volume early warning</b> — a notifiable disease reaching 2 cases in the window, or a true
+one-sided Poisson CUSUM flag on the 14-day series, raises an amber <code>early_warning</code>.</li>
+<li><b>Community-signal pass</b> — <code>health_signals</code> (health workers, police, media) +
+<code>community_reports</code> (public USSD/WhatsApp) pool per district over 72h; ≥3 weighted reports — or
+one critical — alerts <i>before any death is notified</i>.</li>
+<li><b>Morbidity (syndromic) pass</b> — <code>morbidity_reports</code>: aggregate facility/lab case counts via
+<code>POST /api/morbidity</code> or FHIR (<code>/api/fhir/Observation</code>, <code>/fhir/Bundle</code>).
+≥10 pooled cases per district+category in 168h fires an early warning — <b>true pre-mortality detection</b>.</li>
+</ol>
+<p class="small">MPDSR is separate: any maternal/perinatal notification instant-alerts at risk 85.</p>
+
+<h2>5. Pre-mortality inputs — how it sees outbreaks before deaths</h2>
+<table>
+<tr><th>Channel</th><th>Endpoint</th><th>What it carries</th></tr>
+<tr><td>Health signals</td><td><code>POST /api/signals</code></td><td>Unreported/suspicious deaths, illness clusters, community alerts — manual triage workflow + auto-detection</td></tr>
+<tr><td>Community reports</td><td><code>POST /api/community/report</code></td><td>Public USSD/WhatsApp: unusual disease, suspected outbreak, mortality spike (optional API-key gate)</td></tr>
+<tr><td>Morbidity reports</td><td><code>POST /api/morbidity</code></td><td>Aggregate facility/lab syndromic counts — 9-syndrome taxonomy mapped to disease categories</td></tr>
+<tr><td>FHIR feed</td><td><code>POST /api/fhir/Observation|Bundle</code></td><td>HIS/lab systems push R4 Observations; components carry syndrome, count, district, period</td></tr>
+</table>
+
+<h2>6. Roles &amp; access</h2>
+<table>
+<tr><th>Role</th><th>Sees / does</th></tr>
+<tr><td>medical_officer</td><td>Death notification intake, certification of natural deaths (facility-scoped)</td></tr>
+<tr><td>mortuary_clerk</td><td>Demographics, backlog, certificates (restricted)</td></tr>
+<tr><td>pathologist</td><td>Pathology queue, image review, autopsy reports + signatures</td></tr>
+<tr><td>public_health_analyst</td><td>Analytics, outbreak map, alerts, signal triage, audit trail</td></tr>
+<tr><td>system_admin</td><td>Everything + user/facility/threshold management</td></tr>
+<tr><td>executive</td><td>View-only macro dashboard (aggregates only, no records)</td></tr>
+</table>
+<p class="small">Auth: Argon2id passwords, stateful JWT sessions (30-min sliding idle timeout), optional TOTP
+2FA, facility/province/district scoping on every scoped endpoint, hash-chained audit log.</p>
+
+<h2>7. Mobile app — offline-first field capture</h2>
+<ul>
+<li><b>Offline queue</b>: mutations enqueue as ops (coalescing last-write-wins), apply optimistically, replay
+through <code>POST /offline/sync</code> or canonical REST paths; outcomes SYNCED/CONFLICT/REJECTED.
+Encrypted Hive boxes (AES-256) hold the queue, case cache, drafts, and read cache.</li>
+<li><b>Biometric sign-in</b>: works online (token re-validated) and offline (14-day window) —
+<code>MainActivity</code> stays a FlutterFragmentActivity for local_auth.</li>
+<li><b>Server discovery</b>: ServerResolver chain — saved override → dart-defines → last-good → platform
+default — plus UDP-40401 beacon listen + /24 subnet scan + Firebase/GitHub pointers. The laptop's IP is
+never hardcoded: the beacon re-reads interfaces every 3s, and the app self-heals on network change.
+The ngrok domain works on any network including cellular/hotspot.</li>
+<li><b>Background sync</b>: workmanager task flushes the queue every 15 min when connected.</li>
+</ul>
+
+<h2>8. Integrations &amp; interoperability</h2>
+<table>
+<tr><th>System</th><th>Direction</th><th>Notes</th></tr>
+<tr><td>FHIR R4</td><td>In + Out</td><td>Outbound Observation/Patient/Bundle reads; inbound morbidity feeds → detection</td></tr>
+<tr><td>OpenHIM</td><td>Bridge</td><td><code>/dds/mortality</code> channel via docker-compose; Custom-token auth</td></tr>
+<tr><td>DHIS2</td><td>Pull + Push</td><td>Regional data-set exchange (<code>/api/regional/push</code>)</td></tr>
+<tr><td>WHO ICD-11</td><td>Lookup</td><td>Reference search <code>/api/icd-codes/who</code> (local ICD-10 catalog remains primary)</td></tr>
+<tr><td>CRVS</td><td>Bridge</td><td>Civil registration sync table + retry status</td></tr>
+<tr><td>Gemini (optional)</td><td>AI assists</td><td>Summarize/extract/explain — all de-identified server-side, draft-labelled</td></tr>
+</table>
+
+<h2>9. Operations cheat-sheet</h2>
+<table>
+<tr><th>Task</th><th>Command / place</th></tr>
+<tr><td>Start everything</td><td><code>deploy/start-all.ps1</code> (auto-runs at login) — or <code>pnpm dev</code> for dev mode</td></tr>
+<tr><td>Rebuild after code changes</td><td><code>pnpm build</code> then restart — prod serves <code>server/dist</code></td></tr>
+<tr><td>Ports</td><td>4001 API+web · 5174 dev web · 8000 analytics · 8001 whisper · 8002 pathology · 40401/udp beacon</td></tr>
+<tr><td>Wipe demo data</td><td><code>pnpm --filter server reset:cases --confirm</code> (keeps facilities, ICD codes, users)</td></tr>
+<tr><td>Public URL</td><td><code>https://rift-late-sizable.ngrok-free.dev</code> (stable, republished on boot)</td></tr>
+<tr><td>Rebuild mobile</td><td>robocopy → <code>C:\dds-mobile-src</code>, <code>flutter build apk --debug --dart-define DDS_API_URL=…</code>, adb install (long paths break impellerc)</td></tr>
+<tr><td>Tests</td><td><code>pnpm --filter server test</code> · <code>flutter test --concurrency=1</code> · <code>pnpm test:e2e</code></td></tr>
+</table>
+
+<h2>10. Key concepts glossary</h2>
+<table>
+<tr><td><b>ICD-10/11</b></td><td>WHO cause-of-death coding; preliminary at intake, verified at autopsy/certification</td></tr>
+<tr><td><b>CUSUM</b></td><td>Cumulative-sum statistic — detects a sustained low-volume rise that thresholds miss</td></tr>
+<tr><td><b>MPDSR</b></td><td>Maternal &amp; Perinatal Death Surveillance and Response — every such death instant-alerts</td></tr>
+<tr><td><b>Syndromic</b></td><td>Surveillance by symptom clusters (diarrhoea, ARI, rash fever…) before diagnosis/death</td></tr>
+<tr><td><b>RBAC + scope</b></td><td>Role permissions plus territory limits (national/province/district/facility)</td></tr>
+<tr><td><b>Audit chain</b></td><td>Each audit row's hash covers the previous row — tampering is detectable</td></tr>
+<tr><td><b>LWW</b></td><td>Last-write-wins offline merge using clientUpdatedAt; server returns 409 on newer write</td></tr>
+</table>
+
+<footer>Disease Detection System — generated overview · reflects codebase as of 26 Oct 2026 · sources: server/src, mobile/lib, analytics/, AGENTS.md</footer>
+</body></html>

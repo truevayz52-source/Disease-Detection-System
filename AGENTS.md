@@ -17,41 +17,122 @@ netsh advfirewall firewall add rule name="DDS API 4001" dir=in action=allow prot
 (run elevated).
 
 `pnpm --filter server reset:cases --confirm` wipes all transactional data
-(patients, death notifications, autopsies, alerts, signals, audit, etc.) while
+(patients, death notifications, autopsies, alerts, signals, morbidity reports,
+community reports, audit, etc.) while
 keeping reference data (facilities, provinces, districts, ICD codes, users) —
 use it to start demos from an empty dataset. Also clears `server/uploads/`.
 
 ## Early-warning detection
 
-`detectOutbreaks` (`server/src/lib/outbreak.ts`) has a second pass after the
-threshold rules: a district+category gets an `early_warning` alert (amber,
-risk `EARLY_WARNING_RISK_SCORE`, default 35) when a notifiable disease
-reaches `EARLY_WARNING_MIN_CASES` (default 2) inside
-`EARLY_WARNING_WINDOW_HOURS` (default 2160 = cumulative) — or when the
-`/cusum` Poisson-CUSUM endpoint in `analytics/main.py` flags a low-volume
-anomaly. Maternal/Perinatal is excluded (MPDSR instant-alerts); combos with
-an active alert never refire. `OUTBREAK_WINDOW_HOURS=336` in `.env` is a
-demo setting — use 48–72 in production. Below `PREDICTIONS_MIN_POINTS`
-buckets `/analytics/predictions` returns a `rate-baseline` projection.
+`detectOutbreaks` (`server/src/lib/outbreak.ts`) runs five passes on each
+scan (every 8 min from `index.ts`, plus coalesced on each notification):
+
+1. **Stale-alert expiry** — `outbreak`/`early_warning` alerts older than
+   `ALERT_AUTO_RESOLVE_HOURS` (default 336) auto-resolve so a second wave in
+   the same district+category can re-alert; MPDSR alerts never auto-resolve.
+2. **Threshold clusters** — district + disease_category deaths ≥
+   `OUTBREAK_THRESHOLD` inside the window. The window predicate is
+   `GREATEST(date_of_death, created_at)` — a backdated notification entered
+   today still counts (late data entry can't blind the detector; the count
+   lands in `cluster_data.late_reported`). Cause precedence is
+   autopsy `final_icd_code` → `medical_certifications.final_icd_code` →
+   preliminary ICD, so certified deaths re-classify. Combos with an active
+   `outbreak` alert don't refire.
+3. **Low-volume early warning** — a district+category gets an
+   `early_warning` alert (amber, risk `EARLY_WARNING_RISK_SCORE`, default
+   35) when a notifiable disease reaches `EARLY_WARNING_MIN_CASES` (default
+   2) inside `EARLY_WARNING_WINDOW_HOURS` (default 2160 = cumulative) — or
+   when `/cusum` in `analytics/main.py` flags a low-volume anomaly. The
+   CUSUM is a proper one-sided cumulative sum over the whole 14-day series
+   (reset at/below baseline + allowance), not just the tail. Maternal/
+   Perinatal is excluded (MPDSR instant-alerts); combos with an active alert
+   never refire.
+4. **Community-signal pass (pre-mortality)** — `health_signals` (status not
+   resolved/dismissed, excluding `crp:%` promotions to avoid double-count)
+   pooled with `community_reports`, aggregated per district inside
+   `SIGNAL_WINDOW_HOURS` (default 72). Severity `critical` counts double;
+   the district gets an `early_warning` alert under category
+   `Community surveillance` (risk `SIGNAL_RISK_SCORE`, default 45) when the
+   weighted total reaches `SIGNAL_MIN_REPORTS` (default 3) **or any single
+   critical item exists**. Signals also carry an `illness_cluster` type
+   for pre-death syndromic reports.
+5. **Morbidity (syndromic) pass — true pre-mortality detection** —
+   `morbidity_reports` are aggregate facility/lab/HIS case counts ingested
+   via `POST /api/morbidity` (single or `{reports:[…]}` batch) or the FHIR
+   facade (`POST /api/fhir/Observation`, `POST /api/fhir/Bundle`; the mapper
+   reads components on the `…/cs/morbidity` code system — syndrome,
+   case-count, district, facility-id, icd-code, severity, notes — plus
+   `valueInteger`/`effectivePeriod` fallbacks). District+category pooled
+   over `MORBIDITY_WINDOW_HOURS` (default 168); `SUM(case_count)` ≥
+   `MORBIDITY_MIN_CASES` (default 10) fires an `early_warning` alert
+   (`detection: "morbidity"`, risk `MORBIDITY_RISK_SCORE` default 50) —
+   before any death exists. Syndrome→category map in
+   `server/src/lib/syndromes.ts`; an explicit `icdCode` overrides it.
+   `external_id` dedupes both REST and `fhir:<obs-id>` re-posts.
+
+`OUTBREAK_WINDOW_HOURS=336` in `.env` is a demo setting — use 48–72 in
+production. Below `PREDICTIONS_MIN_POINTS` buckets
+`/analytics/predictions` returns a `rate-baseline` projection.
 
 ## Pointing the mobile app at the server
 
 `mobile/lib/data/api_client.dart` resolves the base URL at runtime via
-`ServerResolver`: saved override → `DDS_API_URL` / `DDS_PUBLIC_URL`
+`ServerResolver`: saved override → `DDS_LOOKUP_URL` pointer (a live JSON
+record holding the current public URL) → `DDS_API_URL` / `DDS_PUBLIC_URL`
 dart-defines → last-good → platform default (`10.0.2.2:4001` on the Android
 emulator, `localhost:4001` elsewhere). Users can change it from the gear on
 the sign-in screen or Profile → Security & connection — no rebuild needed.
 
-Build-time overrides:
+All LAN addresses are DYNAMIC — nothing is pinned to a specific IP:
+
+- The UDP discovery beacon (`server/src/lib/discovery-beacon.ts`) re-reads
+  `os.networkInterfaces()` every 3 s and broadcasts the machine's CURRENT
+  addresses — Wi-Fi/Ethernet/IP changes are advertised within one interval.
+- On repeated socket failures the client drops the stale last-good URL,
+  re-probes the candidate list, then runs LAN discovery (beacon + /24 scan,
+  1-min cooldown) — a changed laptop IP self-heals hands-free.
+- The Firebase + GitHub pointers publish the stable ngrok domain on every
+  boot, so the dart-defined URL works on any network including cellular.
+
+Build-time overrides (use the machine's CURRENT IP — `ipconfig` → IPv4):
 
 ```
-flutter run --dart-define DDS_API_URL=http://192.168.8.39:4001/api
-flutter build apk --dart-define DDS_API_URL=http://192.168.8.39:4001/api \
-                 --dart-define DDS_PUBLIC_URL=https://api.example.gov.zw/api
+flutter run --dart-define DDS_API_URL=http://<LAN-IP>:4001/api
+
+# Field/demo phones — bake BOTH the stable ngrok URL and the lookup pointer
+# so the app follows the server on ANY network (mobile data included):
+flutter build apk --debug \
+  --dart-define DDS_API_URL=https://rift-late-sizable.ngrok-free.dev/api \
+  --dart-define DDS_LOOKUP_URL=https://raw.githubusercontent.com/truevayz52-source/Disease-Detection-System/tunnel-pointer/api_url.json
 ```
 
-(If the phone is connected to the PC's mobile hotspot instead of the same
-Wi-Fi, use `http://192.168.137.1:4001/api`.)
+ALWAYS bake `DDS_LOOKUP_URL` into phone builds. Without it the app only has
+baked/last-good addresses plus LAN discovery — it goes dark the moment the
+device leaves the server's subnet (observed 2026-10-27: phone moved to a
+different Wi-Fi, stale `192.168.x.x` last-good, app offline even though the
+server was up). With the pointer, `resolve()` fetches the current public URL
+on every cold start — `start-all.ps1` republishes it each boot — so cellular
+and foreign Wi-Fi keep working as long as the laptop stack + ngrok are up.
+
+(On the PC's mobile hotspot instead of shared Wi-Fi the gateway IP differs —
+e.g. `http://192.168.137.1:4001/api` — but prefer the ngrok URL or
+auto-discovery so network changes don't strand the app.)
+
+Saved-override caveat: an address entered in the settings sheet
+(`dds_api_url`) is candidate #1 AND `_maybeReresolve` refuses to re-resolve
+past it — the app will not self-heal while a dead override is set. Treat the
+override as a temporary fix; the pointer + dart-defines are the durable
+mechanism. To recover a stranded debuggable install over USB without a
+rebuild:
+
+```
+adb shell am force-stop zw.org.mohcc.dds_mobile
+adb shell "run-as zw.org.mohcc.dds_mobile cat shared_prefs/FlutterSharedPreferences.xml" > prefs.xml
+#   add <string name="flutter.dds_api_url">https://rift-late-sizable.ngrok-free.dev/api</string>
+adb shell "run-as zw.org.mohcc.dds_mobile sh -c 'cat > shared_prefs/FlutterSharedPreferences.xml'" < prefs.xml
+adb shell monkey -p zw.org.mohcc.dds_mobile -c android.intent.category.LAUNCHER 1
+#   verify: adb logcat -d | grep server_resolver → "resolved … via ServerSource.saved"
+```
 
 Auto-discovery: the API broadcasts `DDS:<lanIp>:<port>` on UDP **40401**
 every 3 s (`server/src/lib/discovery-beacon.ts`; disable with

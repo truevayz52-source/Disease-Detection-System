@@ -43,6 +43,22 @@ export const config = {
   earlyWarningRiskScore: Number(process.env.EARLY_WARNING_RISK_SCORE ?? 35),
   // Decision-limit multiplier for the Poisson CUSUM in analytics/main.py.
   cusumLimit: Number(process.env.CUSUM_LIMIT ?? 3),
+  // Community-signal layer: aggregates health_signals + community_reports per
+  // district inside the window; fires an 'early_warning' alert when the
+  // severity-weighted count reaches the floor, or on a single critical item.
+  signalMinReports: Number(process.env.SIGNAL_MIN_REPORTS ?? 3),
+  signalWindowHours: Number(process.env.SIGNAL_WINDOW_HOURS ?? 72),
+  signalRiskScore: Number(process.env.SIGNAL_RISK_SCORE ?? 45),
+  // Stale 'outbreak'/'early_warning' alerts auto-resolve after this many hours
+  // so a second wave in the same district+category can re-alert. MPDSR alerts
+  // are excluded — those always require human review.
+  alertAutoResolveHours: Number(process.env.ALERT_AUTO_RESOLVE_HOURS ?? 336),
+  // Morbidity (syndromic) layer: pools morbidity_reports case counts per
+  // district+category inside the window; crossing the floor fires an
+  // 'early_warning' alert — the only feed that sees illness before death.
+  morbidityMinCases: Number(process.env.MORBIDITY_MIN_CASES ?? 10),
+  morbidityWindowHours: Number(process.env.MORBIDITY_WINDOW_HOURS ?? 168),
+  morbidityRiskScore: Number(process.env.MORBIDITY_RISK_SCORE ?? 50),
   // Below this many buckets a forecast falls back to a rate-based baseline.
   predictionsMinPoints: Number(process.env.PREDICTIONS_MIN_POINTS ?? 3),
   // Sliding idle-session timeout — the session's expires_at is bumped forward

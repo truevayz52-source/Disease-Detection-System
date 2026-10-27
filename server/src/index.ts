@@ -53,6 +53,7 @@ import { environmentalDataRouter } from "./routes/environmental-data.js"
 import { gisClusteringRouter } from "./routes/gis-clustering.js"
 import { patientAnonymizationRouter } from "./routes/patient-anonymization.js"
 import { signalsRouter } from "./routes/signals.js"
+import { morbidityRouter } from "./routes/morbidity.js"
 import { fhirRouter } from "./routes/fhir.js"
 import { playbooksRouter } from "./routes/playbooks.js"
 import { evidenceRouter } from "./routes/evidence.js"
@@ -111,6 +112,7 @@ app.use("/api/environmental", environmentalDataRouter)
 app.use("/api/gis", gisClusteringRouter)
 app.use("/api/anonymization", patientAnonymizationRouter)
 app.use("/api/signals", signalsRouter)
+app.use("/api/morbidity", morbidityRouter)
 app.use("/api/fhir", fhirRouter)
 app.use("/api/playbooks", playbooksRouter)
 app.use("/api/evidence", evidenceRouter)
@@ -164,7 +166,10 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
 const server = createServer(app)
 attachRealtime(server)
 attachVoiceStream(server)
-const reportTimer = setInterval(() => { void runScheduledReports() }, 60000)
+const reportTimer = setInterval(() => {
+  void runScheduledReports()
+    .catch((err) => console.error("[reports] scheduled run failed:", err?.message ?? err))
+}, 60000)
 reportTimer.unref()
 
 // Automatic outbreak detection every 8 minutes (Ch 4.4). Runs immediately

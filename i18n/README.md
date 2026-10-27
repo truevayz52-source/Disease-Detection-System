@@ -1,7 +1,9 @@
-# DDS i18n — Zimbabwe 16-language support
+# DDS i18n — Zimbabwe language support
 
 One canonical translation source shared by the React web client, the Flutter
-app and (for language metadata) the Express API.
+app and (for language metadata) the Express API. `languages.json` activates
+the shipped set — today English, chiShona and isiNdebele; the table under
+"Languages" is the full constitutional roadmap the framework targets.
 
 ## Key scheme
 
@@ -67,6 +69,10 @@ MOHCC language services before production use. Provider responses are cached
 in `i18n/.cache/` (gitignored) so re-runs are incremental.
 
 ## Languages (Constitution of Zimbabwe, s.6)
+
+Active in `languages.json` (shipped in the apps): `en`, `sn`, `nd`. The rest
+are the draft/roadmap set — generate dictionaries, then add the code to
+`languages.json` and run `pnpm i18n:sync` to ship one.
 
 | Code | Language | Status |
 |------|----------|--------|

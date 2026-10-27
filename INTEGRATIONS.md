@@ -101,6 +101,33 @@ Privacy guarantees — enforced by `server/src/lib/deidentify.ts` (mirrored in
 - Machine-translated output always renders with a "verify clinically"
   disclaimer and a show-original toggle.
 
+## Morbidity (syndromic) feeds — FHIR inbound
+
+`morbidity_reports` holds **aggregate** facility/lab case counts (no patient
+PII) and feeds the morbidity detection pass (`MORBIDITY_MIN_CASES` per
+district+category inside `MORBIDITY_WINDOW_HOURS` → `early_warning` alert).
+
+Two ingest paths, both deduped on `external_id` and both nudge the outbreak
+engine on arrival:
+
+- **`POST /api/morbidity`** — one report object or `{"reports": […]}` batch
+  (max 500). Roles: medical_officer, public_health_analyst, system_admin.
+- **`POST /api/fhir/Observation` / `POST /api/fhir/Bundle`** — FHIR R4 feed
+  entry point for HIS/lab systems (e.g. routed through OpenHIM). Minimal
+  Observation: `code.coding` with system
+  `http://mohcc.gov.zw/fhir/cs/morbidity` carrying the syndrome,
+  `valueInteger` for the count, `effectivePeriod` for the reporting window,
+  and a `district` or `facility-id` component for geography. Additional
+  components: `icd-code`, `province`, `severity`, `notes`. The resource `id`
+  (or first `identifier`) dedupes re-posts as `fhir:<id>`.
+
+Syndrome vocabulary (`server/src/lib/syndromes.ts`):
+`acute_watery_diarrhoea`, `bloody_diarrhoea`, `jaundice`,
+`acute_respiratory_infection`, `febrile_rash_illness`,
+`meningitis_suspected`, `vector_fever`, `acute_fever_undifferentiated`,
+`other`. An explicit `icd-code`/`icdCode` resolves the real
+`disease_category` from `icd_codes` and overrides the syndrome mapping.
+
 ## Validation and remaining work
 
 Run `pnpm --filter server test`, `pnpm build`, and

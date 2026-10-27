@@ -18,8 +18,10 @@ const triageRoles = ["public_health_analyst"] as const
 const createSchema = z.object({
   externalId: z.string().max(128).optional(),
   // Mortality-aligned signal taxonomy: unreported community deaths, deaths
-  // needing medico-legal attention, MPDSR candidates and death clusters.
-  signalType: z.enum(["unreported_death", "suspicious_death", "maternal_perinatal", "death_cluster", "community_alert"]).default("unreported_death"),
+  // needing medico-legal attention, MPDSR candidates and death clusters —
+  // plus illness_cluster for pre-mortality syndromic reports (rumours of a
+  // disease cluster in the community before any death occurs).
+  signalType: z.enum(["unreported_death", "suspicious_death", "maternal_perinatal", "death_cluster", "community_alert", "illness_cluster"]).default("unreported_death"),
   title: z.string().min(2).max(255),
   description: z.string().max(8000).optional(),
   sourceChannel: z.enum(["community", "vhw", "facility", "police", "media", "offline"]).default("community"),

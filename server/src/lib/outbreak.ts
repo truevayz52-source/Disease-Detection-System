@@ -13,13 +13,24 @@ import { emailConfigured, sendEmail } from "./email.js"
  * detecting outbreaks even when analytics/ is offline (Ch 5.3 resilience).
  */
 export async function detectOutbreaks(windowHours = config.outbreakWindowHours, notify = true) {
+  // Retire stale alerts first: an 'active' row suppresses re-alerting for its
+  // district+category forever, so without expiry a second wave would be
+  // silently swallowed. MPDSR alerts are left for human review.
+  await query(
+    `UPDATE outbreak_alerts SET status = 'resolved', resolved_at = NOW()
+     WHERE status = 'active' AND alert_type IN ('outbreak','early_warning')
+       AND triggered_date < NOW() - (? * INTERVAL '1 hour')`,
+    [config.alertAutoResolveHours],
+  )
+
   const rules = await query<any[]>("SELECT * FROM alert_thresholds WHERE is_active ORDER BY created_at DESC")
   const clusters: any[] = []
   for (const rule of [...rules, { district: null, disease_category: null, case_threshold: config.outbreakThreshold, time_window_hours: windowHours, default: true }]) {
   const found = await query<any[]>(
     `SELECT f.district, ic.disease_category AS category, COUNT(*) AS case_count,
             BOOL_OR(ic.is_notifiable) AS notifiable,
-            MIN(dn.date_of_death) AS first_death, MAX(dn.date_of_death) AS last_death
+            MIN(dn.date_of_death) AS first_death, MAX(dn.date_of_death) AS last_death,
+            COUNT(*) FILTER (WHERE dn.date_of_death < NOW() - (? * INTERVAL '1 hour')) AS late_reported
      FROM death_notifications dn
      JOIN facilities f ON f.facility_id = dn.facility_id
      LEFT JOIN (
@@ -28,13 +39,18 @@ export async function detectOutbreaks(windowHours = config.outbreakWindowHours, 
        WHERE status = 'finalized'
        ORDER BY notification_id, finalized_at DESC
      ) ar ON ar.notification_id = dn.notification_id
-     JOIN icd_codes ic ON ic.icd_code = COALESCE(ar.final_icd_code, dn.preliminary_icd_code)
+     LEFT JOIN medical_certifications mc ON mc.notification_id = dn.notification_id
+     JOIN icd_codes ic ON ic.icd_code = COALESCE(ar.final_icd_code, mc.final_icd_code, dn.preliminary_icd_code)
      WHERE dn.status <> 'rejected'
-       AND dn.date_of_death >= NOW() - (? * INTERVAL '1 hour') AND dn.date_of_death <= NOW()
+       AND dn.date_of_death <= NOW()
+       -- Surveillance time is "when the system learned of the death": a
+       -- backdated notification still counts, so late data entry can't blind
+       -- the detector to a live cluster.
+       AND GREATEST(dn.date_of_death, dn.created_at) >= NOW() - (? * INTERVAL '1 hour')
        AND (?::text IS NULL OR f.district=?) AND (?::text IS NULL OR ic.disease_category=?)
      GROUP BY f.district, ic.disease_category
      HAVING COUNT(*) >= ?`,
-    [rule.time_window_hours, rule.district, rule.district, rule.disease_category, rule.disease_category, rule.case_threshold],
+    [rule.time_window_hours, rule.time_window_hours, rule.district, rule.district, rule.disease_category, rule.disease_category, rule.case_threshold],
   )
   for (const c of found) {
     const matching = rules.find(r => (!r.district || r.district === c.district) && (!r.disease_category || r.disease_category === c.category))
@@ -69,6 +85,7 @@ export async function detectOutbreaks(windowHours = config.outbreakWindowHours, 
           threshold_id: c.thresholdId,
           first_death: c.first_death,
           last_death: c.last_death,
+          late_reported: Number(c.late_reported ?? 0),
           detection: "node-threshold",
         }),
         c.case_count,
@@ -109,9 +126,11 @@ export async function detectOutbreaks(windowHours = config.outbreakWindowHours, 
        WHERE status = 'finalized'
        ORDER BY notification_id, finalized_at DESC
      ) ar ON ar.notification_id = dn.notification_id
-     JOIN icd_codes ic ON ic.icd_code = COALESCE(ar.final_icd_code, dn.preliminary_icd_code)
+     LEFT JOIN medical_certifications mc ON mc.notification_id = dn.notification_id
+     JOIN icd_codes ic ON ic.icd_code = COALESCE(ar.final_icd_code, mc.final_icd_code, dn.preliminary_icd_code)
      WHERE dn.status <> 'rejected'
-       AND dn.date_of_death >= NOW() - (? * INTERVAL '1 hour')
+       AND dn.date_of_death <= NOW()
+       AND GREATEST(dn.date_of_death, dn.created_at) >= NOW() - (? * INTERVAL '1 hour')
        AND ic.disease_category NOT IN ('Maternal','Perinatal')
      GROUP BY f.district, ic.disease_category, ic.is_notifiable, day`,
     [config.earlyWarningWindowHours],
@@ -174,11 +193,117 @@ export async function detectOutbreaks(windowHours = config.outbreakWindowHours, 
       ],
     )
     created.push({ alertId, district: c.district, category: c.category, caseCount: c.total, riskScore: config.earlyWarningRiskScore, earlyWarning: true })
+    covered.add(key) // keep later passes from double-alerting this combo in the same run
     if (notify) {
       for (const recipient of ewRecipients) {
         await notifyUser(recipient.user_id, "Early warning raised", `${c.district}: ${c.total} reported death(s) in ${c.category} (${detection}).`, "/alerts", "outbreak")
         if (recipient.email && emailConfigured()) {
           void sendEmail(recipient.email, "DDS early warning", `${c.district}: ${c.total} reported death(s) in ${c.category} (${detection}). Open the dashboard for details.`).catch(() => {})
+        }
+      }
+    }
+  }
+
+  // --- Community-signal pass (pre-mortality early warning) -----------------
+  // health_signals + community_reports are the only inputs that can fire
+  // BEFORE a death notification exists — illness-cluster rumours, unreported
+  // deaths, 'outbreak_suspected' USSD/WhatsApp reports. Both pools aggregate
+  // per district inside SIGNAL_WINDOW_HOURS; 'critical' severity counts
+  // double and a single critical item alerts on its own. Land as
+  // 'early_warning' alerts under the 'Community surveillance' category so
+  // existing alert UIs render them unchanged.
+  const sigRows = await query<any[]>(
+    `SELECT district, severity, signal_type AS kind FROM health_signals
+     WHERE reported_at >= NOW() - (? * INTERVAL '1 hour')
+       AND status NOT IN ('resolved','dismissed') AND district IS NOT NULL
+       -- 'crp:%' rows are promotions of community_reports — counting both
+       -- sides of the union would double-count a verified report.
+       AND (external_id IS NULL OR external_id NOT LIKE 'crp:%')
+     UNION ALL
+     SELECT district, severity, report_type AS kind FROM community_reports
+     WHERE reported_at >= NOW() - (? * INTERVAL '1 hour') AND district IS NOT NULL`,
+    [config.signalWindowHours, config.signalWindowHours],
+  )
+  const sigByDistrict = new Map<string, { weight: number; count: number; critical: number; kinds: Set<string> }>()
+  for (const r of sigRows) {
+    const d = sigByDistrict.get(r.district) ?? { weight: 0, count: 0, critical: 0, kinds: new Set<string>() }
+    d.count += 1
+    d.weight += r.severity === "critical" ? 2 : 1
+    if (r.severity === "critical") d.critical += 1
+    d.kinds.add(r.kind)
+    sigByDistrict.set(r.district, d)
+  }
+  for (const [district, s] of sigByDistrict) {
+    if (covered.has(`${district}||Community surveillance`)) continue
+    if (s.weight < config.signalMinReports && s.critical === 0) continue
+    const alertId = newId("alt")
+    await query(
+      `INSERT INTO outbreak_alerts
+       (alert_id, disease_category, district, cluster_data, case_count, risk_score, alert_type, dispatched_channels)
+       VALUES (?, 'Community surveillance', ?, ?, ?, ?, 'early_warning', ?)`,
+      [
+        alertId,
+        district,
+        JSON.stringify({ detection: "community-signal", signals: s.count, critical: s.critical, weight: s.weight, types: [...s.kinds], window_hours: config.signalWindowHours }),
+        s.count,
+        config.signalRiskScore,
+        emailConfigured() ? "websocket,email,audit-log" : "websocket,audit-log",
+      ],
+    )
+    created.push({ alertId, district, category: "Community surveillance", caseCount: s.count, riskScore: config.signalRiskScore, earlyWarning: true, signalBased: true })
+    if (notify) {
+      for (const recipient of ewRecipients) {
+        await notifyUser(recipient.user_id, "Community signal cluster", `${district}: ${s.count} community signal(s) in ${config.signalWindowHours}h${s.critical ? `, ${s.critical} critical` : ""} — no death notifications required.`, "/alerts", "outbreak")
+        if (recipient.email && emailConfigured()) {
+          void sendEmail(recipient.email, "DDS community signal alert", `${district}: ${s.count} community signal(s) in ${config.signalWindowHours}h${s.critical ? `, ${s.critical} critical` : ""}. Open the dashboard for details.`).catch(() => {})
+        }
+      }
+    }
+  }
+
+  // --- Morbidity (syndromic) pass — true pre-mortality detection ------------
+  // morbidity_reports are aggregate facility/lab/HIS case counts — the only
+  // feed that observes illness while patients are still alive. Pooled per
+  // district + disease_category across MORBIDITY_WINDOW_HOURS; crossing
+  // MORBIDITY_MIN_CASES raises an 'early_warning' alert (detection
+  // 'morbidity'). The reporting period can be backdated, so like the death
+  // passes the window uses the later of period_start / reported_at. Shares
+  // the 'covered' dedupe — a morbidity alert never blocks the harder
+  // 'outbreak' tier, which dedupes on its own type.
+  const morbRows = await query<any[]>(
+    `SELECT district, disease_category AS category, SUM(case_count) AS cases,
+            COUNT(*) AS reports, ARRAY_AGG(DISTINCT syndrome) AS syndromes
+     FROM morbidity_reports
+     WHERE GREATEST(period_start, reported_at::date) >= (NOW() - (? * INTERVAL '1 hour'))::date
+     GROUP BY district, disease_category`,
+    [config.morbidityWindowHours],
+  )
+  for (const m of morbRows) {
+    const key = `${m.district}||${m.category}`
+    if (covered.has(key)) continue
+    const cases = Number(m.cases)
+    if (cases < config.morbidityMinCases) continue
+    const alertId = newId("alt")
+    await query(
+      `INSERT INTO outbreak_alerts
+       (alert_id, disease_category, district, cluster_data, case_count, risk_score, alert_type, dispatched_channels)
+       VALUES (?, ?, ?, ?, ?, ?, 'early_warning', ?)`,
+      [
+        alertId,
+        m.category,
+        m.district,
+        JSON.stringify({ detection: "morbidity", cases, reports: Number(m.reports), syndromes: m.syndromes, window_hours: config.morbidityWindowHours }),
+        cases,
+        config.morbidityRiskScore,
+        emailConfigured() ? "websocket,email,audit-log" : "websocket,audit-log",
+      ],
+    )
+    created.push({ alertId, district: m.district, category: m.category, caseCount: cases, riskScore: config.morbidityRiskScore, earlyWarning: true, morbidity: true })
+    if (notify) {
+      for (const recipient of ewRecipients) {
+        await notifyUser(recipient.user_id, "Morbidity cluster raised", `${m.district}: ${cases} reported ${m.category} case(s) across ${m.reports} report(s) — before any death notification.`, "/alerts", "outbreak")
+        if (recipient.email && emailConfigured()) {
+          void sendEmail(recipient.email, "DDS morbidity alert", `${m.district}: ${cases} reported ${m.category} case(s) in ${config.morbidityWindowHours}h. Open the dashboard for details.`).catch(() => {})
         }
       }
     }

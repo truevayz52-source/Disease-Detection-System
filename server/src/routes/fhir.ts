@@ -1,12 +1,19 @@
 import { Router } from "../lib/router.js"
 import { query } from "../db.js"
 import { requireAuth, requireRole } from "../auth/middleware.js"
+import { writeAudit } from "../lib/audit.js"
+import { SYNDROMES, type Syndrome } from "../lib/syndromes.js"
+import { insertMorbidityReports, type MorbidityReportInput } from "./morbidity.js"
+import { detectOutbreaksCoalesced } from "../lib/outbreak.js"
 
 export const fhirRouter = Router()
 
 // Patient-level FHIR data carries PII — restrict to clinical/analyst roles,
 // consistent with /api/patients (executives get aggregates, not records).
 const fhirReaders = requireRole("public_health_analyst", "pathologist")
+const fhirWriters = requireRole("medical_officer", "public_health_analyst", "system_admin")
+
+const MORBIDITY_CS = "http://mohcc.gov.zw/fhir/cs/morbidity"
 
 // Death observations join the finalized autopsy cause (falling back to the
 // preliminary ICD/clinical summary) and the facility for place of death.
@@ -102,9 +109,9 @@ fhirRouter.get("/metadata", requireAuth, (_req, res) => {
     rest: [{
       mode: "server",
       resource: [
-        { type: "Observation", interaction: [{ code: "read" }, { code: "search-type" }] },
+        { type: "Observation", interaction: [{ code: "read" }, { code: "search-type" }, { code: "create" }] },
         { type: "Patient", interaction: [{ code: "read" }, { code: "search-type" }] },
-        { type: "Bundle", interaction: [{ code: "read" }] },
+        { type: "Bundle", interaction: [{ code: "read" }, { code: "create" }] },
       ],
     }],
   })
@@ -181,4 +188,93 @@ fhirRouter.get("/Bundle", requireAuth, fhirReaders, async (_req, res) => {
       ...patients.map((p) => ({ resource: patientToFhir(p) })),
     ],
   })
+})
+
+// ---------------------------------------------------------------------------
+// Inbound morbidity feed — FHIR R4 Observations carrying aggregate syndromic
+// case counts from facilities/HIS while patients are still alive. Structured
+// fields travel as components on the mohcc morbidity code system; the minimal
+// form is code.coding (syndrome) + valueInteger (count) + effectivePeriod +
+// a district or facility-id component. Lands in morbidity_reports through the
+// same ingest path as POST /api/morbidity.
+// ---------------------------------------------------------------------------
+
+const SEVERITIES = new Set(["low", "medium", "high", "critical"])
+
+function componentValue(obs: any, code: string): any {
+  const c = (obs?.component ?? []).find((x: any) =>
+    (x.code?.coding ?? []).some((cd: any) => cd.code === code))
+  return c?.valueString ?? c?.valueInteger ?? c?.valueQuantity?.value ?? c?.valueCodeableConcept?.text ?? null
+}
+
+function normalizeSyndrome(raw: any): Syndrome {
+  const s = String(raw ?? "").trim().toLowerCase().replace(/[\s-]+/g, "_")
+  return (SYNDROMES as readonly string[]).includes(s) ? (s as Syndrome) : "other"
+}
+
+export function fhirObservationToMorbidity(obs: any): MorbidityReportInput | null {
+  if (obs?.resourceType !== "Observation") return null
+  const today = new Date().toISOString().slice(0, 10)
+  const syndromeCoding = (obs.code?.coding ?? []).find((c: any) => c.system === MORBIDITY_CS)
+  const syndrome = normalizeSyndrome(syndromeCoding?.code ?? componentValue(obs, "syndrome") ?? obs.code?.text)
+
+  const caseCount = Number(obs.valueInteger ?? obs.valueQuantity?.value ?? componentValue(obs, "case-count") ?? 0)
+  if (!Number.isInteger(caseCount) || caseCount < 1) return null
+
+  const start = String(obs.effectivePeriod?.start ?? obs.effectiveDateTime ?? today).slice(0, 10)
+  const end = String(obs.effectivePeriod?.end ?? obs.effectiveDateTime ?? start).slice(0, 10)
+  const district = componentValue(obs, "district")
+  const facilityId = componentValue(obs, "facility-id")
+  if (!district && !facilityId) return null // unplaceable — refuse rather than mislocate
+
+  const severity = String(componentValue(obs, "severity") ?? "medium")
+  const idPart = obs.id ?? obs.identifier?.[0]?.value
+  return {
+    externalId: idPart ? `fhir:${idPart}` : undefined,
+    facilityId: facilityId ?? undefined,
+    district: district ?? "",
+    province: componentValue(obs, "province") ?? undefined,
+    syndrome,
+    icdCode: componentValue(obs, "icd-code") ?? undefined,
+    caseCount,
+    periodStart: start,
+    periodEnd: end,
+    sourceChannel: "fhir",
+    severity: (SEVERITIES.has(severity) ? severity : "medium") as MorbidityReportInput["severity"],
+    notes: componentValue(obs, "notes") ?? obs.note?.[0]?.text ?? undefined,
+  }
+}
+
+function operationOutcome(severity: string, code: string, diagnostics: string) {
+  return { resourceType: "OperationOutcome", issue: [{ severity, code, diagnostics }] }
+}
+
+fhirRouter.post("/Observation", requireAuth, fhirWriters, async (req, res) => {
+  const item = fhirObservationToMorbidity(req.body)
+  if (!item) return res.status(400).json(operationOutcome("error", "invalid", "Observation lacks a usable syndrome, case count, or location (district/facility-id component)"))
+
+  const result = await insertMorbidityReports([item], req.user!.userId)
+  if ("error" in result) return res.status(400).json(operationOutcome("error", "invalid", result.error))
+
+  await writeAudit(req, { action: "fhir_morbidity_ingested", entityType: "morbidity_reports", entityId: result.reportIds[0] ?? null })
+  void detectOutbreaksCoalesced(undefined, true).catch(() => [])
+  if (result.duplicates.length) {
+    return res.status(200).json({ ...operationOutcome("information", "duplicate", "Already received"), reportId: result.duplicates[0] })
+  }
+  res.status(201).json({ reportIds: result.reportIds })
+})
+
+fhirRouter.post("/Bundle", requireAuth, fhirWriters, async (req, res) => {
+  const entries = Array.isArray(req.body?.entry) ? req.body.entry : []
+  const items = entries.map((e: any) => fhirObservationToMorbidity(e?.resource)).filter((i: any): i is MorbidityReportInput => !!i)
+  if (!items.length) {
+    return res.status(400).json(operationOutcome("error", "invalid", "Bundle contains no usable morbidity Observations"))
+  }
+
+  const result = await insertMorbidityReports(items, req.user!.userId)
+  if ("error" in result) return res.status(400).json(operationOutcome("error", "invalid", result.error))
+
+  await writeAudit(req, { action: "fhir_morbidity_bundle_ingested", entityType: "morbidity_reports", entityId: result.reportIds[0] ?? null, details: { inserted: result.reportIds.length } })
+  void detectOutbreaksCoalesced(undefined, true).catch(() => [])
+  res.status(201).json({ inserted: result.reportIds.length, reportIds: result.reportIds, skipped: entries.length - items.length, duplicates: result.duplicates })
 })
