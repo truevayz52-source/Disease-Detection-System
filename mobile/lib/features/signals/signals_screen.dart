@@ -305,7 +305,7 @@ class _SignalsScreenState extends State<SignalsScreen> {
               )
             else
               for (final s in _items.cast<Map<String, dynamic>>())
-                _signalCard(s, canTriage),
+                _signalCard(s, canTriage, canCreate),
             const SizedBox(height: 80),
           ],
         ),
@@ -339,7 +339,7 @@ class _SignalsScreenState extends State<SignalsScreen> {
     ),
   );
 
-  Widget _signalCard(Map<String, dynamic> s, bool canTriage) {
+  Widget _signalCard(Map<String, dynamic> s, bool canTriage, bool canCreate) {
     final severity = '${s['severity']}';
     final sevColor = switch (severity) {
       'critical' || 'high' => DdsColors.severityCritical,
