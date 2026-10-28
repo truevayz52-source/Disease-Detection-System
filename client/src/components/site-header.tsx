@@ -55,7 +55,7 @@ export function SiteHeader({ title, subtitle }: { title: string; subtitle?: stri
           <span className="size-1.5 animate-pulse rounded-full bg-emerald-500" />SYSTEM LIVE
         </span>
 
-        {user?.role !== "executive" && <Link to="/search" aria-label={t("Search")} className="rounded-md border border-border p-2 hover:bg-muted"><Search className="size-4" /></Link>}
+        {["medical_officer", "mortuary_clerk", "pathologist", "public_health_analyst"].includes(user?.role ?? "") && <Link to="/search" aria-label={t("Search")} className="rounded-md border border-border p-2 hover:bg-muted"><Search className="size-4" /></Link>}
 
         <LanguageMenu />
 

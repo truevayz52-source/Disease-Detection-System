@@ -2,6 +2,7 @@ import { useState } from "react"
 import useSWR from "swr"
 import { toast } from "sonner"
 import { api } from "@/lib/api"
+import { useAuth } from "@/lib/auth"
 import { Workspace, Panel, Field, Action, LoadState, Rows } from "@/components/workspace"
 import { usePreferences } from "@/lib/preferences"
 import { fmtDate } from "@/lib/format"
@@ -55,12 +56,12 @@ export function MpdsrPage() {
       description={t("Maternal/perinatal death review pipeline: notified → review → corrective actions → closed-loop completion.")}
     >
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-        {stat("Awaiting review", counts.queue, "bg-rose-50")}
-        {stat("Notified", counts.notified, "bg-amber-50")}
-        {stat("In review", counts.in_review, "bg-blue-50")}
-        {stat("Actions assigned", counts.actions, "bg-purple-50")}
-        {stat("Completed", counts.completed, "bg-emerald-50")}
-        {stat("Overdue", counts.overdue, "bg-red-50")}
+        {stat("Awaiting review", counts.queue, "bg-slate-100 border-slate-300")}
+        {stat("Notified", counts.notified, "bg-blue-100 border-blue-300")}
+        {stat("In review", counts.in_review, "bg-amber-100 border-amber-300")}
+        {stat("Actions assigned", counts.actions, "bg-purple-100 border-purple-300")}
+        {stat("Completed", counts.completed, "bg-emerald-100 border-emerald-300")}
+        {stat("Overdue", counts.overdue, "bg-red-100 border-red-300")}
       </div>
 
       {qErr ? <p className="text-sm text-destructive">{t("Could not load queue")}</p> : null}
@@ -469,33 +470,111 @@ export function ThresholdPage() {
 
 export function CrossBorderPage() {
   const { t } = usePreferences()
+  const { user } = useAuth()
+  const analyst = user?.role === "public_health_analyst"
   const { data, error, mutate } = useSWR<any>("/cross-border/cases", api),
+    { data: notifs } = useSWR<any>("/notifications", api),
     [id, setId] = useState(""),
     [country, setCountry] = useState(""),
     [crossing, setCrossing] = useState(""),
-    [history, setHistory] = useState("")
+    [history, setHistory] = useState(""),
+    [caseQ, setCaseQ] = useState(""),
+    [open, setOpen] = useState(false)
+  const selected = notifs?.items.find((n: any) => n.notification_id === id)
+  const s = caseQ.trim().toLowerCase()
+  const matches = (notifs?.items ?? [])
+    .filter((n: any) => !s || `${n.patient_name} ${n.facility_name} ${n.notification_id}`.toLowerCase().includes(s))
+    .slice(0, 50)
   return (
-    <Workspace title={t("Cross-border Tracking")} description={t("Record reported travel history for surveillance review.")}>
-      <Panel title={t("Mark a case")}>
+    <Workspace
+      title={t("Cross-border Tracking")}
+      description={
+        analyst
+          ? t("Flag death notifications where travel into or out of the country was reported, so imported and exported cases stay under HQ surveillance review.")
+          : t("Record travel across borders reported for a death notification you filed — flagged cases are escalated for national review.")
+      }
+    >
+      <Panel title={analyst ? t("Flag a case") : t("Record travel history on a case")}>
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label={t("Notification ID")} value={id} onChange={setId} />
-          <Field label={t("Source country")} value={country} onChange={setCountry} />
-          <Field label={t("Border crossing")} value={crossing} onChange={setCrossing} />
-          <Field label={t("Travel history")} value={history} onChange={setHistory} />
+          <label className="block space-y-1.5 text-sm">
+            <span className="font-medium">
+              {t("Death notification")}
+              <span className="ml-0.5 text-destructive">*</span>
+            </span>
+            <div className="relative">
+              <Input
+                placeholder={t("Search by patient, facility or notification ID…")}
+                value={open ? caseQ : selected ? `${selected.patient_name} — ${selected.facility_name}` : ""}
+                onFocus={() => {
+                  setOpen(true)
+                  setCaseQ("")
+                }}
+                onChange={(e) => setCaseQ(e.target.value)}
+                onBlur={() => setTimeout(() => setOpen(false), 150)}
+              />
+              {open && (
+                <ul className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-md border bg-popover p-1 shadow-md">
+                  {matches.length === 0 && (
+                    <li className="px-2 py-1.5 text-sm text-muted-foreground">{t("No matching notifications")}</li>
+                  )}
+                  {matches.map((n: any) => (
+                    <li key={n.notification_id}>
+                      <button
+                        type="button"
+                        className="flex w-full flex-col rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent"
+                        onMouseDown={() => {
+                          setId(n.notification_id)
+                          setOpen(false)
+                        }}
+                      >
+                        <span>
+                          {n.patient_name} — {n.facility_name}
+                        </span>
+                        <span className="font-mono text-xs text-muted-foreground">{n.notification_id}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </label>
+          <Field label={t("Country of origin")} value={country} onChange={setCountry} required />
+          <Field label={t("Reported border crossing (if known)")} value={crossing} onChange={setCrossing} />
+          <Field label={t("Travel history (as reported)")} value={history} onChange={setHistory} />
         </div>
         <Action
+          disabled={!id || country.trim().length < 2}
           onClick={async () => {
-            await post("/cross-border/mark", { notificationId: id, sourceCountry: country, borderCrossingPoint: crossing, travelHistory: history })
+            await post("/cross-border/mark", {
+              notificationId: id,
+              sourceCountry: country.trim(),
+              borderCrossingPoint: crossing.trim(),
+              travelHistory: history.trim(),
+            })
             mutate()
-            toast.success(t("Travel history recorded"))
+            setId("")
+            setCountry("")
+            setCrossing("")
+            setHistory("")
+            toast.success(analyst ? t("Case flagged for cross-border review") : t("Travel history recorded — case escalated for review"))
           }}
         >
-          {t("Save case")}
+          {analyst ? t("Flag case") : t("Save travel record")}
         </Action>
       </Panel>
       <LoadState error={error} loading={!data && !error} empty={data?.items.length === 0} />
       {data?.items.length > 0 && (
-        <Rows items={data.items} columns={[["source_country", "Source country"], ["border_crossing_point", "Crossing"], ["district", "District"], ["travel_history", "Travel history"]]} />
+        <Rows
+          items={data.items}
+          columns={[
+            ["patient_name", "Case"],
+            ["preliminary_icd_code", "ICD"],
+            ["source_country", "Origin"],
+            ["border_crossing_point", "Crossing"],
+            ["district", "District"],
+            ["travel_history", "Travel history"],
+          ]}
+        />
       )}
     </Workspace>
   )

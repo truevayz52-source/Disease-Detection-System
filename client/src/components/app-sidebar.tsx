@@ -47,25 +47,25 @@ const NAV_ITEMS: NavItem[] = [
   },
 {
     href: "/notifications",
-    label: "Death Notifications",
+    label: "Death Records",
     icon: ClipboardPlus,
     roles: ["medical_officer", "public_health_analyst", "mortuary_clerk"],
   },
 {
     href: "/pathology/queue",
-    label: "Pathology Review Queue",
+    label: "Cases to Review",
     icon: FileSearch,
     roles: ["pathologist"],
   },
 {
     href: "/autopsy",
-    label: "Autopsy Reports",
+    label: "Autopsies",
     icon: Stethoscope,
     roles: ["pathologist", "public_health_analyst"],
   },
 {href:"/voice-autopsy",label: "Verbal Autopsy",icon:ListChecks,roles:["medical_officer","mortuary_clerk"]},
-{href:"/signals",label: "Mortality Signals",icon:Radio,roles:["medical_officer","mortuary_clerk","public_health_analyst"]},
-{href:"/mpdsr",label: "MPDSR Workflows",icon:ListChecks,roles:["medical_officer","public_health_analyst"]},
+{href:"/signals",label: "Community Reports",icon:Radio,roles:["medical_officer","mortuary_clerk","public_health_analyst"]},
+{href:"/mpdsr",label: "Maternal Deaths",icon:ListChecks,roles:["medical_officer","public_health_analyst"]},
 {
     href: "/alerts",
     label: "Alerts",
@@ -74,48 +74,48 @@ const NAV_ITEMS: NavItem[] = [
   },
 {
     href: "/analytics",
-    label: "Outbreak Analytics",
+    label: "Analytics",
     icon: Activity,
     roles: ["public_health_analyst"],
   },
 {
     href: "/predictions",
-    label: "Predictions",
+    label: "Forecasts",
     icon: TrendingUp,
     roles: ["public_health_analyst", "executive"],
   },
 {
     href: "/analytics/map",
-    label: "Outbreak Map",
+    label: "Disease Map",
     icon: Map,
     roles: ["public_health_analyst"],
   },
-{href:"/cross-border",label: "Cross-border Tracking",icon:ListChecks,roles:["medical_officer","public_health_analyst"]},
-{href:"/resource-allocation",label: "Resource Forecasting",icon:ListChecks,roles:["public_health_analyst"]},
+{href:"/cross-border",label: "Border Cases",icon:ListChecks,roles:["medical_officer","public_health_analyst"]},
+{href:"/resource-allocation",label: "Resource Planning",icon:ListChecks,roles:["public_health_analyst"]},
 {href:"/reports",label: "Reports",icon:ListChecks,roles:["public_health_analyst","executive"]},
-{href:"/gps-dashboard",label: "GPS Tracking",icon:ListChecks,roles:["medical_officer","public_health_analyst"]},
-{href:"/offline-sync",label: "Offline Sync",icon:ListChecks,roles:["medical_officer","mortuary_clerk"]},
+
+{href:"/offline-sync",label: "Sync Status",icon:ListChecks,roles:["medical_officer","mortuary_clerk"]},
 {
     href: "/admin/users",
-    label: "User Management",
+    label: "Manage Users",
     icon: Users,
     roles: ["system_admin"],
   },
 {
     href: "/admin/facilities",
-    label: "Facilities",
+    label: "Manage Facilities",
     icon: ListChecks,
     roles: ["system_admin"],
   },
-{href:"/alert-config",label: "Alert Thresholds",icon:ListChecks,roles:["public_health_analyst"]},
-{href:"/security-dashboard",label: "Security Dashboard",icon:ShieldAlert,roles:["system_admin"]},
+{href:"/alert-config",label: "Alert Settings",icon:ListChecks,roles:["public_health_analyst"]},
+{href:"/security-dashboard",label: "Security",icon:ShieldAlert,roles:["system_admin"]},
 {
     href: "/audit",
     label: "Audit Trail",
     icon: ScrollText,
-    roles: ["public_health_analyst", "system_admin"],
+    roles: ["system_admin"],
   },
-{href:"/system-settings",label: "System Settings",icon:ListChecks,roles:["system_admin"]}
+{href:"/system-settings",label: "Settings",icon:ListChecks,roles:["system_admin"]}
 ]
 
 export function AppSidebar({

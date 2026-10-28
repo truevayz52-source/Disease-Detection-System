@@ -391,21 +391,6 @@ CREATE TABLE IF NOT EXISTS voice_transcriptions (
 );
 CREATE INDEX IF NOT EXISTS idx_transcription_notification ON voice_transcriptions (notification_id);
 
--- GPS tracking for field workers
-CREATE TABLE IF NOT EXISTS gps_tracking (
-  tracking_id varchar(36) PRIMARY KEY,
-  user_id varchar(36) NOT NULL,
-  latitude decimal(10,6) NOT NULL,
-  longitude decimal(10,6) NOT NULL,
-  accuracy decimal(10,2),
-  altitude decimal(10,2),
-  tracking_timestamp timestamptz NOT NULL DEFAULT now(),
-  activity_type varchar(50),
-  CONSTRAINT fk_gps_user FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
-);
-CREATE INDEX IF NOT EXISTS idx_gps_user_time ON gps_tracking (user_id, tracking_timestamp);
-CREATE INDEX IF NOT EXISTS idx_gps_location ON gps_tracking (latitude, longitude);
-
 -- System settings and preferences
 CREATE TABLE IF NOT EXISTS system_settings (
   setting_id varchar(36) PRIMARY KEY,

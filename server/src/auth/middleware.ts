@@ -71,24 +71,49 @@ function toAuthUser(row: any, sessionId: string): AuthUser {
   }
 }
 
+// Every authenticated request used to cost two sequential DB round-trips
+// (session+user join, then the expires bump) — ~450ms of pure latency on a
+// pooled Supabase link. Cache the resolved AuthUser briefly; the expiry
+// bump is throttled + fire-and-forget so it never blocks the request.
+const AUTH_CACHE_TTL_MS = 45_000
+const authCache = new Map<string, { user: AuthUser; sessionId: string; expiresAt: number }>()
+const sessionTouch = new Map<string, number>()
+
+function touchSession(sessionId: string) {
+  const last = sessionTouch.get(sessionId) ?? 0
+  if (Date.now() - last < 15_000) return
+  sessionTouch.set(sessionId, Date.now())
+  if (sessionTouch.size > 5000) for (const [k, v] of sessionTouch) if (Date.now() - v > 3600_000) sessionTouch.delete(k)
+  void query("UPDATE sessions SET expires_at = ? WHERE session_id = ?", [
+    new Date(Date.now() + config.sessionIdleMinutes * 60_000), sessionId,
+  ]).catch(() => {})
+}
+
 /** Legacy path: our JWT signature AND a live (non-revoked) sessions row.
  *  Sliding idle timeout — each authenticated request bumps expires_at
  *  forward so a session lapses after SESSION_IDLE_MINUTES of inactivity. */
 async function authenticateLegacy(token: string): Promise<AuthUser | null> {
   if (!verifyToken(token)) return null
+  const h = tokenHash(token)
+  const cached = authCache.get(h)
+  if (cached && cached.expiresAt > Date.now()) {
+    touchSession(cached.sessionId)
+    return cached.user
+  }
   const rows = await query<any[]>(
     `SELECT s.session_id, s.expires_at, s.revoked, ${USER_COLS}
      FROM sessions s JOIN users u ON u.user_id = s.user_id
      WHERE s.token_hash = ?`,
-    [tokenHash(token)],
+    [h],
   )
   const row = rows[0]
   if (!row || row.revoked || new Date(row.expires_at) < new Date() || row.status !== "active") return null
   // Slide the expiry forward — the session only dies when it goes quiet.
-  await query("UPDATE sessions SET expires_at = ? WHERE session_id = ?", [
-    new Date(Date.now() + config.sessionIdleMinutes * 60_000), row.session_id,
-  ])
-  return toAuthUser(row, row.session_id)
+  touchSession(row.session_id)
+  const user = toAuthUser(row, row.session_id)
+  authCache.set(h, { user, sessionId: row.session_id, expiresAt: Date.now() + AUTH_CACHE_TTL_MS })
+  if (authCache.size > 5000) for (const [k, v] of authCache) if (v.expiresAt < Date.now()) authCache.delete(k)
+  return user
 }
 
 // New-style Supabase projects can sign tokens with asymmetric keys published

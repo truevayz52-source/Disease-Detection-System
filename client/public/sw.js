@@ -2,7 +2,7 @@
 // Caches the app shell so the installed app opens instantly and static
 // assets survive intermittent connectivity. API/data requests always go to
 // the network (this is a surveillance system — stale case data is unsafe).
-const CACHE_NAME = "dds-shell-v1"
+const CACHE_NAME = "dds-shell-v2"
 const SHELL_ASSETS = ["/manifest.webmanifest", "/icon-192.png", "/icon-512.png"]
 
 self.addEventListener("install", (event) => {
@@ -29,18 +29,36 @@ self.addEventListener("fetch", (event) => {
   // Never cache API/auth calls — this system requires fresh, authoritative data.
   if (url.pathname.startsWith("/api/")) return
 
+  // Hashed build assets are immutable — safe to serve cache-first.
+  if (url.origin === self.location.origin && url.pathname.startsWith("/assets/")) {
+    event.respondWith(
+      caches.match(request).then(
+        (cached) =>
+          cached ??
+          fetch(request).then((response) => {
+            if (response.ok) {
+              const clone = response.clone()
+              caches.open(CACHE_NAME).then((cache) => cache.put(request, clone))
+            }
+            return response
+          }),
+      ),
+    )
+    return
+  }
+
+  // Everything else (navigations, index.html, icons) — network-first so new
+  // deploys reach users immediately; cache is only the offline fallback.
+  // A cache-first index.html would pin users to a stale bundle forever.
   event.respondWith(
-    caches.match(request).then((cached) => {
-      if (cached) return cached
-      return fetch(request)
-        .then((response) => {
-          if (response.ok && url.origin === self.location.origin) {
-            const clone = response.clone()
-            caches.open(CACHE_NAME).then((cache) => cache.put(request, clone))
-          }
-          return response
-        })
-        .catch(() => cached)
-    }),
+    fetch(request)
+      .then((response) => {
+        if (response.ok && url.origin === self.location.origin) {
+          const clone = response.clone()
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, clone))
+        }
+        return response
+      })
+      .catch(() => caches.match(request)),
   )
 })

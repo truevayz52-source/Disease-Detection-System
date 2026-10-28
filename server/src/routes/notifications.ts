@@ -85,7 +85,7 @@ notificationsRouter.get("/", requireAuth, async (req, res) => {
   res.json({ items: rows.map(row => req.user!.role === "mortuary_clerk" ? { ...row, clinical_summary: null } : row), total: Number(countRow?.total ?? 0), page, pageSize })
 })
 
-notificationsRouter.post("/", requireAuth, async (req, res) => { res.status(201).json(await createNotification(req, req.body)) })
+notificationsRouter.post("/", requireAuth, requireRole("medical_officer", "mortuary_clerk"), async (req, res) => { res.status(201).json(await createNotification(req, req.body)) })
 
 notificationsRouter.get("/:id", requireAuth, async (req, res) => {
   if (!await canAccessNotification(req.user!, req.params.id)) return res.status(403).json({ error: "Record unavailable" })
@@ -96,22 +96,24 @@ notificationsRouter.get("/:id", requireAuth, async (req, res) => {
     return res.status(403).json({ error: "Forbidden: different facility" })
   }
   if (req.user!.role === "mortuary_clerk") return res.json({ notification: { ...row, clinical_summary: null }, images: [], autopsy: null, certification: null })
-  const images = await query<any[]>(
-    `SELECT image_id, mime_type, resolution, file_hash, original_size_bytes, compressed_size_bytes,
-            compressed, uploaded_timestamp FROM tele_pathology_images WHERE notification_id = ?`,
-    [req.params.id],
-  )
-  const autopsy = await query<any[]>(
-    `SELECT a.autopsy_id, a.status, a.final_icd_code, a.final_cause_of_death, a.legal_threshold_flag,
-            a.digital_signature, a.signature_hmac, a.finalized_at, u.full_name AS pathologist_name
-     FROM autopsy_reports a JOIN users u ON u.user_id = a.pathologist_id WHERE a.notification_id = ?`,
-    [req.params.id],
-  )
-  const certification = await query<any[]>(
-    `SELECT c.*, u.full_name AS certified_by_name
-     FROM medical_certifications c JOIN users u ON u.user_id = c.certified_by WHERE c.notification_id = ?`,
-    [req.params.id],
-  )
+  const [images, autopsy, certification] = await Promise.all([
+    query<any[]>(
+      `SELECT image_id, mime_type, resolution, file_hash, original_size_bytes, compressed_size_bytes,
+              compressed, uploaded_timestamp FROM tele_pathology_images WHERE notification_id = ?`,
+      [req.params.id],
+    ),
+    query<any[]>(
+      `SELECT a.autopsy_id, a.status, a.final_icd_code, a.final_cause_of_death, a.legal_threshold_flag,
+              a.digital_signature, a.signature_hmac, a.finalized_at, u.full_name AS pathologist_name
+       FROM autopsy_reports a JOIN users u ON u.user_id = a.pathologist_id WHERE a.notification_id = ?`,
+      [req.params.id],
+    ),
+    query<any[]>(
+      `SELECT c.*, u.full_name AS certified_by_name
+       FROM medical_certifications c JOIN users u ON u.user_id = c.certified_by WHERE c.notification_id = ?`,
+      [req.params.id],
+    ),
+  ])
   res.json({ notification: row, images, autopsy: autopsy[0] ?? null, certification: certification[0] ?? null })
 })
 

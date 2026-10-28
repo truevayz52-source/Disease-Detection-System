@@ -1,6 +1,6 @@
 import crypto from "node:crypto"
 import type { Request } from "express"
-import { newId, query, getPool, acquireAdvisoryLock, releaseAdvisoryLock } from "../db.js"
+import { newId, query, withAdvisoryLock } from "../db.js"
 
 /**
  * Immutable, tamper-evident audit trail (Chapter 4.7). Every entry's
@@ -17,50 +17,62 @@ export async function writeAudit(
     details?: Record<string, unknown>
   },
 ) {
-  const connection = await getPool().getConnection()
+  // The whole append runs in one transaction under a transaction-scoped
+  // advisory lock — serialized chain writes with no lock that can leak
+  // through the connection pooler.
   try {
-  if (!await acquireAdvisoryLock(connection, "dds_audit_append", 10)) throw new Error("Audit writer busy")
-  const query = async <T = any>(sql: string, params: any[] = []): Promise<T> => {
-    const [rows] = await connection.query(sql, params); return rows as T
-  }
-  const last = await query<any[]>(
-    "SELECT record_hash FROM audit_log ORDER BY chain_sequence DESC LIMIT 1",
-  )
-  const previousHash = last[0]?.record_hash ?? null
-  const auditId = newId("aud")
-  const ip = req?.ip ?? req?.socket?.remoteAddress ?? null
-  const payload = JSON.stringify({
-    audit_id: auditId,
-    user_id: entry.userId ?? req?.user?.userId ?? null,
-    action: entry.action,
-    entity_type: entry.entityType,
-    entity_id: entry.entityId ?? null,
-    ip_address: ip,
-    details: entry.details ?? null,
-    previous_hash: previousHash,
-  })
-  const recordHash = crypto.createHash("sha256").update((previousHash ?? "") + payload).digest("hex")
+    const result = await withAdvisoryLock("dds_audit_append", 10, async (conn) => {
+      const run = async <T = any>(sql: string, params: any[] = []): Promise<T> => {
+        const [rows] = await conn.query(sql, params); return rows as T
+      }
+      const last = await run<any[]>(
+        "SELECT record_hash FROM audit_log ORDER BY chain_sequence DESC LIMIT 1",
+      )
+      const previousHash = last[0]?.record_hash ?? null
+      const auditId = newId("aud")
+      const ip = req?.ip ?? req?.socket?.remoteAddress ?? null
+      const payload = JSON.stringify({
+        audit_id: auditId,
+        user_id: entry.userId ?? req?.user?.userId ?? null,
+        action: entry.action,
+        entity_type: entry.entityType,
+        entity_id: entry.entityId ?? null,
+        ip_address: ip,
+        details: entry.details ?? null,
+        previous_hash: previousHash,
+      })
+      const recordHash = crypto.createHash("sha256").update((previousHash ?? "") + payload).digest("hex")
 
-  await query(
-    `INSERT INTO audit_log (audit_id, user_id, action, entity_type, entity_id, ip_address, details, record_hash, previous_hash)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      auditId,
-      entry.userId ?? req?.user?.userId ?? null,
-      entry.action,
-      entry.entityType,
-      entry.entityId ?? null,
-      ip,
-      entry.details ? JSON.stringify(entry.details) : null,
-      recordHash,
-      previousHash,
-    ],
-  )
-  await query("UPDATE audit_log SET session_id = ?, device_fingerprint = ? WHERE audit_id = ?", [req?.user?.sessionId ?? null, crypto.createHash("sha256").update(req?.headers["user-agent"] ?? "unknown").digest("hex"), auditId])
-  return auditId
-  } finally {
-    await releaseAdvisoryLock(connection, "dds_audit_append")
-    connection.release()
+      await run(
+        `INSERT INTO audit_log (audit_id, user_id, action, entity_type, entity_id, ip_address, details, record_hash, previous_hash, session_id, device_fingerprint)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          auditId,
+          entry.userId ?? req?.user?.userId ?? null,
+          entry.action,
+          entry.entityType,
+          entry.entityId ?? null,
+          ip,
+          entry.details ? JSON.stringify(entry.details) : null,
+          recordHash,
+          previousHash,
+          req?.user?.sessionId ?? null,
+          crypto.createHash("sha256").update(req?.headers["user-agent"] ?? "unknown").digest("hex"),
+        ],
+      )
+      return auditId
+    })
+    if (!result.acquired) {
+      // The audit trail is tamper-evident, not availability-critical — a stalled
+      // writer must never 500 the request (e.g. sign-in during a DB hiccup).
+      console.error("[audit] writer busy — entry dropped:", entry.action)
+      return null
+    }
+    return result.value
+  } catch (err) {
+    // Same reasoning: audit write failures are logged, not propagated.
+    console.error("[audit] write failed — entry dropped:", entry.action, err instanceof Error ? err.message : err)
+    return null
   }
 }
 

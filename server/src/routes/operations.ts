@@ -16,14 +16,14 @@ import { SUPPORTED_LANGUAGES } from "../lib/languages.js"
 import { translateConfigured } from "./translate.js"
 
 export const operationsRouter = Router()
-operationsRouter.use(["/settings","/security","/integrations","/gps","/search","/analytics/districts","/forecasts","/voice","/ai","/regional"],requireAuth)
+operationsRouter.use(["/settings","/security","/integrations","/search","/analytics/districts","/forecasts","/voice","/ai","/regional"],requireAuth)
 const admin = requireRole("system_admin")
 const analysis = requireRole("public_health_analyst","executive")
 operationsRouter.get("/settings/public",async(_req,res)=>res.json({name:"Disease Detection System",languages:SUPPORTED_LANGUAGES,timezone:"Africa/Harare"}))
 operationsRouter.get("/settings/all",admin,async(_req,res)=>res.json({items:await query("SELECT * FROM system_settings ORDER BY setting_key")}))
-const settingsSchema=z.object({site_notice:z.string().max(1000),maintenance_message:z.string().max(1000),gps_retention_days:z.number().int().min(1).max(365)}).partial()
+const settingsSchema=z.object({site_notice:z.string().max(1000),maintenance_message:z.string().max(1000)}).partial()
 operationsRouter.patch("/settings/:key",admin,async(req,res)=>{
-  if(!["site_notice","maintenance_message","gps_retention_days"].includes(req.params.key))return res.status(400).json({error:"Unknown setting"})
+  if(!["site_notice","maintenance_message"].includes(req.params.key))return res.status(400).json({error:"Unknown setting"})
   const d=settingsSchema.parse({[req.params.key]:req.body.value}) as Record<string,unknown>
   if(d[req.params.key]===undefined)return res.status(400).json({error:"Setting value is required"})
   await query("INSERT INTO system_settings (setting_id,setting_key,setting_value,updated_by) VALUES (?,?,?,?) ON CONFLICT (setting_key) DO UPDATE SET setting_value=EXCLUDED.setting_value,updated_by=EXCLUDED.updated_by",[newId("set"),req.params.key,JSON.stringify(d[req.params.key]),req.user!.userId])
@@ -40,19 +40,6 @@ operationsRouter.post("/security/unlock/:id",admin,async(req,res)=>{
   await writeAudit(req,{action:"unlock_account",entityType:"users",entityId:req.params.id});res.json({ok:true})
 })
 operationsRouter.get("/integrations/status",admin,async(_req,res)=>res.json({analytics:await pythonHealth(),pathologyModel:process.env.PATHOLOGY_INFERENCE_URL?"configured; availability checked on use":"not_configured",whisper:process.env.WHISPER_URL?"configured; availability checked on use":"not_configured",whoCatalog:whoConfigured()?"ICD-11 lookup configured; local ICD-10 retained":"local ICD-10; WHO credentials/release not configured",regionalBridge:regionalStatus(),email:emailConfigured()?"SMTP configured; delivery checked on use":"not_configured",translation:translateConfigured()?"Gemini configured; requests are de-identified before dispatch":"not_configured — offline glossary fallback only",audit:"SHA-256 hash chain; not a distributed blockchain"}))
-const gps=z.object({latitude:z.number().min(-90).max(90),longitude:z.number().min(-180).max(180),accuracy:z.number().min(0).max(100000).optional(),altitude:z.number().optional(),activity:z.string().max(50).default("field_visit")})
-operationsRouter.post("/gps/track",requireRole("medical_officer"),async(req,res)=>{
-  const d=gps.parse(req.body),id=newId("gps")
-  await query("INSERT INTO gps_tracking (tracking_id,user_id,latitude,longitude,accuracy,altitude,activity_type) VALUES (?,?,?,?,?,?,?)",[id,req.user!.userId,d.latitude,d.longitude,d.accuracy??null,d.altitude??null,d.activity])
-  await writeAudit(req,{action:"record_location",entityType:"gps_tracking",entityId:id});res.status(201).json({id})
-})
-operationsRouter.get("/gps/user/:userId/history",requireRole("medical_officer","public_health_analyst"),async(req,res)=>{
-  if(req.user!.role==="medical_officer" && req.params.userId!==req.user!.userId)return res.status(403).json({error:"Forbidden"})
-  res.json({items:await query("SELECT * FROM gps_tracking WHERE user_id=? ORDER BY tracking_timestamp DESC LIMIT 200",[req.params.userId])})
-})
-operationsRouter.get("/gps/nearby",requireRole("public_health_analyst"),async(_req,res)=>{
-  res.json({items:await query("SELECT g.*,u.full_name FROM gps_tracking g JOIN users u ON u.user_id=g.user_id WHERE tracking_timestamp>=NOW()-INTERVAL '1 day' ORDER BY tracking_timestamp DESC LIMIT 200")})
-})
 operationsRouter.get("/search/global",requireRole("medical_officer","mortuary_clerk","pathologist","public_health_analyst"),async(req,res)=>{
   const q=z.string().min(2).max(100).parse(req.query.q),like=`%${q}%`
   res.json({items:await query(`SELECT dn.notification_id,p.full_name,f.facility_name,dn.status FROM death_notifications dn JOIN patients p ON p.patient_id=dn.patient_id JOIN facilities f ON f.facility_id=dn.facility_id WHERE (p.full_name LIKE ? OR p.national_id LIKE ? OR dn.notification_id LIKE ?) ${facilityScoped(req.user!)?"AND dn.facility_id=?":""} ORDER BY dn.created_at DESC LIMIT 50`,[like,like,like,...facilityScoped(req.user!)?[req.user!.facilityId]:[]])})
@@ -60,7 +47,13 @@ operationsRouter.get("/search/global",requireRole("medical_officer","mortuary_cl
 operationsRouter.get("/analytics/districts",analysis,async(_req,res)=>{
   res.json({items:await query("SELECT f.district,ic.disease_category,COUNT(*) AS deaths,COUNT(*) FILTER (WHERE dn.status IN ('pending_review','under_review')) AS pending,COUNT(*) FILTER (WHERE dn.is_maternal_perinatal) AS maternal_perinatal FROM death_notifications dn JOIN facilities f ON f.facility_id=dn.facility_id JOIN icd_codes ic ON ic.icd_code=dn.preliminary_icd_code WHERE dn.status<>'rejected' AND dn.date_of_death>=NOW()-INTERVAL '30 days' GROUP BY f.district,ic.disease_category ORDER BY deaths DESC")})
 })
-operationsRouter.get("/forecasts",analysis,async(_req,res)=>res.json({items:await query("SELECT * FROM resource_forecasts ORDER BY forecast_generated_at DESC LIMIT 200")}))
+// Live expected-caseload view: last-28-day reporting rate scaled to the
+// requested window — no stored snapshot needed to look at it.
+operationsRouter.get("/forecasts",analysis,async(req,res)=>{
+  const days=Math.min(30,Math.max(1,Number(req.query.days)||7))
+  const items=await query<any[]>(`SELECT f.district,ic.disease_category,COUNT(*)::int AS observed_28d,CEIL(COUNT(*)::numeric*?/28)::int AS predicted_cases FROM death_notifications dn JOIN facilities f ON f.facility_id=dn.facility_id JOIN icd_codes ic ON ic.icd_code=dn.preliminary_icd_code WHERE dn.status<>'rejected' AND dn.date_of_death>=NOW()-INTERVAL '28 days' GROUP BY f.district,ic.disease_category ORDER BY predicted_cases DESC,f.district`,[days])
+  res.json({items:items.map(r=>({...r,forecast_horizon_days:days})),days,method:"28-day reporting rate"})
+})
 operationsRouter.post("/forecasts/generate",requireRole("public_health_analyst"),async(req,res)=>{
   const d=z.object({days:z.number().int().min(1).max(30).default(7)}).parse(req.body)
   const groups=await query<any[]>("SELECT f.district,ic.disease_category,COUNT(*) AS n FROM death_notifications dn JOIN facilities f ON f.facility_id=dn.facility_id JOIN icd_codes ic ON ic.icd_code=dn.preliminary_icd_code WHERE dn.status<>'rejected' AND dn.date_of_death>=NOW()-INTERVAL '28 days' GROUP BY f.district,ic.disease_category")

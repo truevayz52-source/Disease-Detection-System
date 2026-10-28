@@ -5,6 +5,11 @@ import path from "node:path"
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  // maplibre-gl resolves its worker via import.meta.url — pre-bundling moves
+  // it into .vite/deps where maplibre-gl-worker.mjs doesn't exist (404).
+  optimizeDeps: {
+    exclude: ["maplibre-gl"],
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "src"),

@@ -217,11 +217,20 @@ class _SignalsScreenState extends State<SignalsScreen> {
   Widget build(BuildContext context) {
     final role = context.watch<AuthRepository>().user?.role;
     final canTriage = const ['public_health_analyst'].contains(role);
+    final canCreate =
+        const ['medical_officer', 'mortuary_clerk'].contains(role);
+    final canCapture = const [
+      'medical_officer',
+      'mortuary_clerk',
+      'public_health_analyst',
+    ].contains(role);
 
     return AppScaffold(
       title: tr('Mortality Signals'),
       actions: [IconButton(icon: const Icon(Icons.refresh), onPressed: _load)],
-      floatingActionButton: FloatingActionButton.extended(
+      floatingActionButton: !canCapture
+          ? null
+          : FloatingActionButton.extended(
         onPressed: _newSignal,
         icon: const Icon(Icons.add),
         label: Text(tr('New signal')),
@@ -484,7 +493,8 @@ class _SignalsScreenState extends State<SignalsScreen> {
                   ),
                 // Conversion is gated on verification — an unverified signal
                 // must not become an official death record.
-                if (kDeathSignalTypes.contains('${s['signal_type']}') &&
+                if (canCreate &&
+                    kDeathSignalTypes.contains('${s['signal_type']}') &&
                     (stage == 'verified' || stage == 'escalated'))
                   OutlinedButton.icon(
                     onPressed: () => _createFromSignal(s),

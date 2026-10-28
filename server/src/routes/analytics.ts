@@ -191,10 +191,11 @@ analyticsRouter.get("/trends", requireAuth, requireRole(...ANALYST_ROLES, "execu
 
 // Case points + facilities for the Leaflet surveillance map.
 analyticsRouter.get("/geo", requireAuth, requireRole(...ANALYST_ROLES), async (_req, res) => {
-  const facilities = await query<any[]>(
-    "SELECT facility_id, facility_name, province, district, latitude, longitude, facility_type FROM facilities",
-  )
-  const cases = await query<any[]>(
+  const [facilities, cases] = await Promise.all([
+    query<any[]>(
+      "SELECT facility_id, facility_name, province, district, latitude, longitude, facility_type FROM facilities",
+    ),
+    query<any[]>(
     `SELECT dn.notification_id, dn.date_of_death, COALESCE(ar.final_icd_code, dn.preliminary_icd_code) AS icd_code, ic.disease_category,
             p.latitude, p.longitude, f.facility_id, f.district,
             f.latitude AS facility_lat, f.longitude AS facility_lng
@@ -208,7 +209,7 @@ analyticsRouter.get("/geo", requireAuth, requireRole(...ANALYST_ROLES), async (_
      JOIN facilities f ON f.facility_id = dn.facility_id
      JOIN icd_codes ic ON ic.icd_code = COALESCE(ar.final_icd_code, dn.preliminary_icd_code)
      WHERE dn.status <> 'rejected' AND dn.date_of_death >= NOW() - INTERVAL '90 days'`,
-  )
+  )])
   // Fall back to facility coordinates when a patient has no address coords.
   const points = cases.map((c) => ({
     ...c,
@@ -310,9 +311,12 @@ interface ForecastResult {
 /** Forecast `periods` ahead — sklearn via the FastAPI service with optional
  *  Fourier seasonality, then Node regression, then a rate-based baseline when
  *  history is too short for a regression. Returns an approximate 95% band. */
-async function forecastCounts(counts: number[], periods: number, seasonal = 0): Promise<ForecastResult | null> {
+async function forecastCounts(counts: number[], periods: number, seasonal = 0, baselineRate?: number): Promise<ForecastResult | null> {
   if (!counts.length) return null
-  if (counts.length >= config.predictionsMinPoints) {
+  // Gate on the amount of recorded data, not on how many distinct days/weeks
+  // it happens to span — a cluster of deaths entered on one day still counts.
+  // (≥2 points are still required to fit a line.)
+  if (counts.length >= 2 && counts.reduce((a, b) => a + b, 0) >= config.predictionsMinPoints) {
     const py = await callPython<{ forecast: { index: number; predicted: number; lower: number; upper: number }[]; method: string }>(
       "/forecast",
       { series: counts.map((count, index) => ({ index, count })), periods, seasonal },
@@ -330,7 +334,7 @@ async function forecastCounts(counts: number[], periods: number, seasonal = 0): 
       Math.max(0, Math.round((intercept + slope * (counts.length + k)) * 10) / 10))
     return { preds, lower: preds.map(() => 0), upper: [...preds], method: "regression" }
   }
-  const mean = counts.reduce((a, b) => a + b, 0) / counts.length
+  const mean = baselineRate ?? counts.reduce((a, b) => a + b, 0) / counts.length
   const preds = Array.from({ length: periods }, () => Math.max(0, Math.round(mean * 10) / 10))
   return { preds, lower: preds.map(() => 0), upper: [...preds], method: "rate-baseline" }
 }
@@ -338,7 +342,7 @@ async function forecastCounts(counts: number[], periods: number, seasonal = 0): 
 interface BatchInput { id: string; counts: number[]; periods: number; seasonal: number; daily: boolean; lastLabel: string }
 async function batchForecast(inputs: BatchInput[]): Promise<Record<string, { preds: number[]; lower: number[]; upper: number[]; method: string; labels: string[] } | null>> {
   if (!inputs.length) return {}
-  const valid = inputs.filter((i) => i.counts.length >= config.predictionsMinPoints)
+  const valid = inputs.filter((i) => i.counts.length >= 2 && i.counts.reduce((a, b) => a + b, 0) >= config.predictionsMinPoints)
   if (!valid.length) return Object.fromEntries(inputs.map((i) => [i.id, null]))
   const py = await callPython<{ items: { id: string; forecast: { index: number; predicted: number; lower: number; upper: number }[]; method: string }[] }>(
     "/forecast-batch",
@@ -469,7 +473,18 @@ analyticsRouter.get(
 
     const series: PredPoint[] = labels.map((label, i) => ({ label, count: totals[i] }))
     const seasonalPeriod = daily ? 365 : 52
-    const overallPreds = await forecastCounts(totals, periods, seasonalPeriod)
+
+    // Coverage-aware baseline: the observed rate is deaths / periods covered
+    // since the first report — including silent periods with no deaths — so a
+    // single busy day doesn't project at that intensity forever.
+    const observedTotal = totals.reduce((a, b) => a + b, 0)
+    const periodMs = (daily ? 1 : 7) * 86_400_000
+    const coveragePeriods = labels.length
+      ? Math.max(1, Math.floor((Date.now() - Date.parse(`${labels[0]}T00:00:00Z`)) / periodMs) + 1)
+      : 0
+    const baselineRate = coveragePeriods ? observedTotal / coveragePeriods : 0
+
+    const overallPreds = await forecastCounts(totals, periods, seasonalPeriod, baselineRate)
     const forecast: PredForecast[] = overallPreds
       ? overallPreds.preds.map((predicted, k) => ({
           label: stepLabel(labels[labels.length - 1], k + 1, daily),
@@ -490,7 +505,7 @@ analyticsRouter.get(
 
     const overallSummary: string[] = []
     if (!series.length) {
-      overallSummary.push("Not enough reported deaths yet to project a trend — at least one reporting period is needed.")
+      overallSummary.push("Not enough reported deaths yet to project a trend — at least one death notification is needed.")
     } else if (overallPreds?.method === "rate-baseline") {
       overallSummary.push(
         `Baseline projection — about ${horizonTotal} death(s) are expected over the ${horizonPhrase} at the recent reporting rate. Accuracy improves as more history accumulates.`,
@@ -505,22 +520,24 @@ analyticsRouter.get(
     // Per-category projections + summaries. All forecastCounts calls run
     // concurrently — they were previously sequential N× Python round-trips.
     const catEntries = [...byCat.entries()].sort()
-    const catPredsList = await Promise.all(catEntries.map(([, counts]) => forecastCounts(counts, periods, seasonalPeriod)))
+    const catPredsList = await Promise.all(catEntries.map(([, counts]) =>
+      forecastCounts(counts, periods, seasonalPeriod, coveragePeriods ? counts.reduce((a, b) => a + b, 0) / coveragePeriods : 0)))
     const byCategory = [] as any[]
     for (let ci = 0; ci < catEntries.length; ci++) {
       const [category, counts] = catEntries[ci]
       const mean = counts.reduce((a, b) => a + b, 0) / Math.max(1, counts.length)
-      const { slope } = counts.length >= config.predictionsMinPoints ? linearRegressionSeries(counts) : { slope: 0 }
+      const catTotal = counts.reduce((a, b) => a + b, 0)
+      const { slope } = counts.length >= 2 && catTotal >= config.predictionsMinPoints ? linearRegressionSeries(counts) : { slope: 0 }
       const preds = catPredsList[ci]
-      const trend = counts.length < config.predictionsMinPoints ? "insufficient_data" : trendWord(slope, mean)
+      const trend = catTotal < config.predictionsMinPoints ? "insufficient_data" : trendWord(slope, mean)
       const catHorizon = preds ? Math.round(preds.preds.reduce((a, p) => a + p, 0)) : 0
       const catLower = preds ? Math.round(preds.lower.reduce((a, p) => a + p, 0)) : 0
       const catUpper = preds ? Math.round(preds.upper.reduce((a, p) => a + p, 0)) : 0
       const summary: string[] = []
       if (trend === "insufficient_data") {
         summary.push(preds?.method === "rate-baseline"
-          ? `Only ${counts.length} reporting period(s) so far — at the current rate roughly ${catHorizon} ${category} death(s) are expected over the ${horizonPhrase}; the trend label needs more history.`
-          : "Not enough data yet — at least three reporting periods with this category are needed for a projection.")
+          ? `Only ${catTotal} ${category} death(s) recorded so far — at the current rate roughly ${catHorizon} more are expected over the ${horizonPhrase}; the trend label needs more data.`
+          : `Not enough data yet — at least ${config.predictionsMinPoints} reported deaths in this category are needed for a projection.`)
       } else {
         const verb = trend === "rising" ? "rising" : trend === "falling" ? "declining" : "holding steady"
         summary.push(`${category} deaths are ${verb}; roughly ${catHorizon} (${catLower}–${catUpper}) more are projected over the ${horizonPhrase}.`)
@@ -635,6 +652,13 @@ analyticsRouter.get(
     const payload = {
       granularity: daily ? "daily" : "weekly",
       periodWord,
+      minCases: config.predictionsMinPoints,
+      casesRecorded: observedTotal,
+      observed: {
+        totalDeaths: observedTotal,
+        coveragePeriods,
+        perPeriodRate: Math.round(baselineRate * 100) / 100,
+      },
       overall: { series, forecast, directionPct: Math.round(directionPct), forecastMethod: overallPreds?.method ?? null, summary: overallSummary },
       byCategory,
       byDistrict,

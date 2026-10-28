@@ -60,6 +60,16 @@ import { evidenceRouter } from "./routes/evidence.js"
 import { translateRouter } from "./routes/translate.js"
 import { i18nRouter } from "./routes/i18n.js"
 import { aiRouter } from "./routes/ai.js"
+import { mapConfigRouter } from "./routes/map-config.js"
+
+// Process-level crash guards — a stray rejection/exception must log, not
+// take the API down (the tunnel and field phones depend on this process).
+process.on("unhandledRejection", (err) => {
+  console.error("[api] unhandled rejection:", err instanceof Error ? err.stack ?? err.message : err)
+})
+process.on("uncaughtException", (err) => {
+  console.error("[api] uncaught exception:", err instanceof Error ? err.stack ?? err.message : err)
+})
 
 const app = express()
 
@@ -131,6 +141,7 @@ app.use("/api", certificatesRouter)
 app.use("/api", translateRouter)
 app.use("/api/i18n", i18nRouter)
 app.use("/api/ai", aiRouter)
+app.use("/api", mapConfigRouter)
 
 // Production: serve the built web client so web + API share one origin —
 // a single tunnel then exposes the whole app. In dev `client/dist` does not

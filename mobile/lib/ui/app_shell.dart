@@ -128,10 +128,6 @@ final kNavItems = <NavItem>[
     'public_health_analyst',
     'executive',
   ]),
-  NavItem('/gps-dashboard', tr('GPS Tracking'), Icons.gps_fixed_outlined, [
-    'medical_officer',
-    'public_health_analyst',
-  ]),
   NavItem('/offline-sync', tr('Offline Sync'), Icons.sync_outlined, [
     'medical_officer',
     'mortuary_clerk',
@@ -155,7 +151,6 @@ final kNavItems = <NavItem>[
     ['system_admin'],
   ),
   NavItem('/audit', tr('Audit Trail'), Icons.receipt_long_outlined, [
-    'public_health_analyst',
     'system_admin',
   ]),
   NavItem('/system-settings', tr('System Settings'), Icons.settings_outlined, [

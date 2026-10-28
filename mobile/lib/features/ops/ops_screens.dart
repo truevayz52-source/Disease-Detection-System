@@ -3,14 +3,12 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../data/api_client.dart';
-import '../../data/auth_repository.dart';
 import '../../data/mutation_service.dart';
 import '../../l10n/app_localizations.dart';
 import '../../ui/app_shell.dart';
@@ -686,162 +684,6 @@ class _SecurityScreenState extends State<SecurityScreen> {
                       ),
               ),
             ],
-            const SizedBox(height: 40),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// GPS tracking — opt-in location capture + history.
-/// Port of GpsPage in operations.tsx.
-class GpsScreen extends StatefulWidget {
-  const GpsScreen({super.key});
-
-  @override
-  State<GpsScreen> createState() => _GpsScreenState();
-}
-
-class _GpsScreenState extends State<GpsScreen> {
-  List<dynamic> _items = [];
-  bool _loading = true;
-  bool _recording = false;
-  Object? _error;
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-    try {
-      final uid = context.read<AuthRepository>().user?.userId;
-      final res = await context.read<ApiClient>().get('/gps/user/$uid/history');
-      if (mounted) {
-        setState(() {
-          _items = (res['items'] as List?) ?? [];
-          _loading = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _error = e;
-          _loading = false;
-        });
-      }
-    }
-  }
-
-  Future<void> _record() async {
-    setState(() => _recording = true);
-    try {
-      var perm = await Geolocator.checkPermission();
-      if (perm == LocationPermission.denied) {
-        perm = await Geolocator.requestPermission();
-      }
-      if (perm == LocationPermission.denied ||
-          perm == LocationPermission.deniedForever) {
-        throw Exception(tr('Location permission denied'));
-      }
-      final p = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          timeLimit: Duration(seconds: 15),
-        ),
-      );
-      if (!mounted) return;
-      // GPS breadcrumbs queue happily offline — field staff keep moving.
-      throwIfFailed(
-        await context.read<MutationService>().http(
-          'POST',
-          '/gps/track',
-          body: {
-            'latitude': p.latitude,
-            'longitude': p.longitude,
-            'accuracy': p.accuracy,
-          },
-        ),
-      );
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(tr('Location saved'))));
-      }
-      await _load();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('$e')));
-      }
-    } finally {
-      if (mounted) setState(() => _recording = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AppScaffold(
-      title: tr('GPS Tracking'),
-      actions: [IconButton(icon: const Icon(Icons.refresh), onPressed: _load)],
-      child: RefreshIndicator(
-        onRefresh: _load,
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            Text(
-              tr(
-                'Share a location only when you choose. The phone requests location permission; there is no background tracking.',
-              ),
-              style: const TextStyle(
-                fontSize: 12,
-                color: DdsColors.mutedForeground,
-              ),
-            ),
-            const SizedBox(height: 12),
-            SectionCard(
-              title: tr('Field visit'),
-              child: SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: _recording ? null : _record,
-                  icon: _recording
-                      ? const SizedBox(
-                          width: 14,
-                          height: 14,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Icon(Icons.my_location, size: 16),
-                  label: Text(tr('Record my current location')),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            if (_loading)
-              loadingOr(null)
-            else if (_error != null)
-              loadingOr(_error, onRetry: _load)
-            else if (_items.isEmpty)
-              Card(child: EmptyState(tr('No locations recorded yet.')))
-            else
-              _rowTable(_items, [
-                'latitude',
-                'Latitude',
-                'longitude',
-                'Longitude',
-                'accuracy',
-                'Accuracy (m)',
-                'tracking_timestamp',
-                'Recorded',
-              ]),
             const SizedBox(height: 40),
           ],
         ),

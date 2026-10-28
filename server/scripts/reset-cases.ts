@@ -49,7 +49,7 @@ const TRANSACTIONAL_TABLES = [
   "communications_log",
   "signal_playbook_links",
   "voice_transcriptions",
-  "gps_tracking",
+
   "cross_border_cases",
   "crvs_bridge",
   "resource_forecasts",

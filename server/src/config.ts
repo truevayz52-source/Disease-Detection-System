@@ -65,6 +65,10 @@ export const config = {
   // on every authenticated request; it lapses when idle longer than this.
   sessionIdleMinutes: Number(process.env.SESSION_IDLE_MINUTES ?? 30),
   communityApiKey: process.env.COMMUNITY_API_KEY ?? null,
+  // Basemap tiles for the web/mobile surveillance maps — see lib/map-tiles.ts.
+  googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY ?? null,
+  mapProvider: process.env.MAP_PROVIDER ?? null,
+  mapTileStyle: process.env.MAP_TILE_STYLE ?? "hybrid",
   // Streaming transcription endpoint on the Python service. Derived from
   // WHISPER_URL unless overridden — http://…/transcribe -> ws://…/stream.
   whisperWsUrl: process.env.WHISPER_WS_URL ?? (process.env.WHISPER_URL

@@ -31,6 +31,9 @@ interface CategoryProjection {
 interface Predictions {
   granularity: "weekly" | "daily"
   periodWord: string
+  minCases: number
+  casesRecorded: number
+  observed: { totalDeaths: number; coveragePeriods: number; perPeriodRate: number }
   overall: { series: Point[]; forecast: ForecastPoint[]; directionPct: number; forecastMethod: "regression" | "rate-baseline" | null; summary: string[] }
   byCategory: CategoryProjection[]
   byDistrict: { district: string; projected: number; sharePct: number }[]
@@ -90,6 +93,23 @@ function ProjectionChart({ series, forecast, nowMarker }: { series: Point[]; for
   )
 }
 
+// Plain-language "how close are we to a real forecast" meter.
+function DataReadiness({ have, need, unit }: { have: number; need: number; unit: string }) {
+  const done = Math.min(have, need)
+  return (
+    <div className="space-y-1.5">
+      <div className="flex gap-1">
+        {Array.from({ length: need }, (_, i) => (
+          <span key={i} className={`h-1.5 flex-1 rounded-full ${i < done ? "bg-primary" : "bg-muted-foreground/25"}`} />
+        ))}
+      </div>
+      <p className="text-xs text-muted-foreground">
+        {have} / {need} {unit}
+      </p>
+    </div>
+  )
+}
+
 function TrendChip({ trend }: { trend: CategoryProjection["trend"] }) {
   const { t } = usePreferences()
   if (trend === "insufficient_data") return <Badge variant="outline">{t("Not enough data")}</Badge>
@@ -110,6 +130,11 @@ export default function PredictionsPage() {
   const { t } = usePreferences()
   const { data } = useSWR<Predictions>("/analytics/predictions", (u: string) => api(u), { refreshInterval: 15_000 })
   const banner = data?.banner ? BANNER_STYLE[data.banner.state] : null
+  const minCases = data?.minCases ?? 3
+  const casesRecorded = data?.casesRecorded ?? 0
+  const needsMore = !!data && casesRecorded < minCases
+
+  const caseUnit = data ? "death notifications recorded" : ""
 
   return (
     <>
@@ -130,21 +155,58 @@ export default function PredictionsPage() {
           </Card>
         )}
 
-        {/* Headline summary */}
+        {/* Headline answer — one big number, one plain sentence */}
         <Card className="shadow-lg">
           <CardHeader>
             <CardTitle className="text-sm">{t("Projection summary")}</CardTitle>
-            <CardDescription>
-              <Badge variant="outline">
-                {data?.granularity === "daily" ? t("Daily projection") : t("4-week projection")}
-              </Badge>
-              {data?.overall.forecastMethod === "rate-baseline" && (
-                <Badge variant="secondary" className="ml-2">{t("Baseline projection")}</Badge>
-              )}
-            </CardDescription>
+            <CardDescription>{t("What the system expects next, in plain terms")}</CardDescription>
           </CardHeader>
-          <CardContent>
-            <SummaryLines lines={data?.topSummary ?? [t("Loading projections…")]} />
+          <CardContent className="space-y-4">
+            {!data ? (
+              <SummaryLines lines={[t("Loading projections…")]} />
+            ) : (
+              <>
+                <div className="flex flex-wrap items-baseline gap-x-2">
+                  <span className="text-4xl font-bold tabular-nums">~{data.metrics.projectedTotal}</span>
+                  <span className="text-sm text-muted-foreground">
+                    {t("projected death(s) over the")} {data.metrics.projectedPeriod}
+                  </span>
+                </div>
+                {data.observed && data.observed.coveragePeriods > 0 && (
+                  <p className="text-sm text-muted-foreground">
+                    {t("How this was estimated:")} {data.observed.totalDeaths} {t("reported death(s) over")}{" "}
+                    {data.observed.coveragePeriods} {data.observed.coveragePeriods === 1 ? data.periodWord : `${data.periodWord}s`}{" "}
+                    {t("of reporting")} ≈ {data.observed.perPeriodRate}/{data.periodWord},{" "}
+                    {t("projected forward")}
+                  </p>
+                )}
+                <Badge variant={data.overall.forecastMethod === "rate-baseline" ? "secondary" : "outline"}>
+                  {data.overall.forecastMethod === "rate-baseline"
+                    ? t("Rough estimate — limited history")
+                    : t("Trend forecast")}
+                </Badge>
+                {data.overall.forecastMethod !== "rate-baseline" && data.metrics.projectedUpper > 0 && (
+                  <p className="text-sm text-muted-foreground">
+                    {t("Likely range:")} {data.metrics.projectedLower}–{data.metrics.projectedUpper}
+                  </p>
+                )}
+
+                {/* What it takes to get a stronger prediction */}
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    {t("Data needed for a reliable forecast")}
+                  </p>
+                  <DataReadiness have={casesRecorded} need={minCases} unit={caseUnit} />
+                  {!needsMore && (
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      {t("Enough history for full trend forecasts — accuracy keeps improving as more notifications are recorded.")}
+                    </p>
+                  )}
+                </div>
+
+                {data.topSummary.length > 1 && <SummaryLines lines={data.topSummary.slice(1)} />}
+              </>
+            )}
           </CardContent>
         </Card>
 
@@ -153,7 +215,7 @@ export default function PredictionsPage() {
         <Card className="shadow-lg">
           <CardHeader>
             <CardTitle className="text-sm">{t("Mortality projection")}</CardTitle>
-            <CardDescription>{t("Reported deaths vs forecast")}</CardDescription>
+            <CardDescription>{t("Solid line = deaths actually reported · Dashed line = forecast")}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="h-72">
@@ -176,7 +238,17 @@ export default function PredictionsPage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 {c.trend === "insufficient_data" ? (
-                  <p className="py-10 text-center text-sm text-muted-foreground">{t("Not enough data yet to chart a projection.")}</p>
+                  <div className="space-y-3 py-6">
+                    <p className="text-center text-sm text-muted-foreground">
+                      {t("Not enough history to chart a trend yet.")}
+                    </p>
+                    <div className="mx-auto max-w-xs">
+                      <DataReadiness have={casesRecorded} need={minCases} unit={caseUnit} />
+                    </div>
+                    <p className="text-center text-xs text-muted-foreground">
+                      {t("Trend labels unlock once enough death notifications are recorded.")}
+                    </p>
+                  </div>
                 ) : (
                   <div className="h-52">
                     <ProjectionChart series={c.series} forecast={c.forecast} />

@@ -39,10 +39,14 @@ final _routeRoles = <String, List<String>>{
     'mortuary_clerk',
     'public_health_analyst',
   ],
-  '/notifications/new': const [
+  '/signals': const [
     'medical_officer',
     'mortuary_clerk',
     'public_health_analyst',
+  ],
+  '/notifications/new': const [
+    'medical_officer',
+    'mortuary_clerk',
   ],
   '/pathology/queue': const ['pathologist'],
   '/autopsy': _pathologyRoles,
@@ -51,7 +55,7 @@ final _routeRoles = <String, List<String>>{
   '/admin/users': const ['system_admin'],
   '/admin/facilities': const ['system_admin'],
   '/system-settings': const ['system_admin'],
-  '/audit': const ['public_health_analyst', 'system_admin'],
+  '/audit': const ['system_admin'],
   // Web routes outside the sidebar (App.tsx RequireRole gates).
   '/notifications-center': const [
     'medical_officer',
@@ -196,7 +200,6 @@ GoRouter buildRouter(AuthRepository auth) {
         path: '/security-dashboard',
         builder: (c, s) => const SecurityScreen(),
       ),
-      GoRoute(path: '/gps-dashboard', builder: (c, s) => const GpsScreen()),
       GoRoute(
         path: '/resource-allocation',
         builder: (c, s) => const ForecastScreen(),

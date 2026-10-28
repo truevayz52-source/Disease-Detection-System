@@ -146,7 +146,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     final role = context.watch<AuthRepository>().user?.role;
     final canCreate = const [
       'medical_officer',
-      'public_health_analyst',
       'mortuary_clerk',
     ].contains(role);
     final items = [..._localPending, ..._filtered];

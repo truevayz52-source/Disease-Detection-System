@@ -36,7 +36,7 @@ export function sniffImageType(buf: Buffer): "image/jpeg" | "image/png" | "image
 imagesRouter.post(
   "/notifications/:id/images",
   requireAuth,
-  requireRole("medical_officer", "pathologist", "public_health_analyst"),
+  requireRole("medical_officer", "pathologist"),
   upload.single("file"),
   async (req, res) => {
     if (!await canAccessNotification(req.user!, req.params.id, true)) return res.status(403).json({ error: "Forbidden" })

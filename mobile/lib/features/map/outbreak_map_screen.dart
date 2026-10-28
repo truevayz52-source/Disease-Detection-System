@@ -10,10 +10,22 @@ import '../../ui/theme.dart';
 import '../../ui/widgets.dart';
 
 /// Outbreak map — port of client/src/pages/analytics-map.tsx.
-/// Esri tiles + facility ring markers + category-coloured case dots with
-/// the same toggle/legend controls as the web page.
+/// Google hybrid tiles (via GET /api/config/map, same resolver the web map
+/// uses) + facility ring markers + category-coloured case dots with the
+/// same toggle/legend controls as the web page.
 class OutbreakMapScreen extends StatefulWidget {
   const OutbreakMapScreen({super.key});
+
+  /// Escape hatch matching the codebase's dart-define config pattern.
+  static const _tileUrlOverride =
+      String.fromEnvironment('DDS_MAP_TILE_URL');
+
+  /// Key-free Google hybrid tiles — works even when /config/map is
+  /// unreachable (offline, older server) so the map never renders blank.
+  static const _fallbackTileUrl =
+      'https://mt{s}.google.com/vt/lyrs=y&hl=en&x={x}&y={y}&z={z}';
+  static const _googleSubdomains = ['mt0', 'mt1', 'mt2', 'mt3'];
+  static const _googleAttribution = 'Imagery © Google · Map data ©2026 Google';
 
   static const _categoryColors = [
     Color(0xFFDC2626),
@@ -38,6 +50,11 @@ class _OutbreakMapScreenState extends State<OutbreakMapScreen> {
   bool _showCases = true;
   bool _showFacilities = true;
   Set<String>? _activeCategories; // null = all visible
+  String _tileUrl = OutbreakMapScreen._tileUrlOverride.isNotEmpty
+      ? OutbreakMapScreen._tileUrlOverride
+      : OutbreakMapScreen._fallbackTileUrl;
+  List<String> _tileSubdomains = OutbreakMapScreen._googleSubdomains;
+  String _tileAttribution = OutbreakMapScreen._googleAttribution;
 
   @override
   void initState() {
@@ -51,7 +68,23 @@ class _OutbreakMapScreenState extends State<OutbreakMapScreen> {
       _error = null;
     });
     try {
-      final res = await context.read<ApiClient>().get('/analytics/geo');
+      final api = context.read<ApiClient>();
+      final res = await api.get('/analytics/geo');
+      // Server-resolved tile config (session refresh, provider failover);
+      // skipped entirely when DDS_MAP_TILE_URL is baked in.
+      if (OutbreakMapScreen._tileUrlOverride.isEmpty) {
+        api.get('/config/map').then((cfg) {
+          if (!mounted || cfg['urlTemplate'] is! String) return;
+          setState(() {
+            _tileUrl = cfg['urlTemplate'] as String;
+            _tileSubdomains =
+                (cfg['subdomains'] as List?)?.cast<String>() ??
+                OutbreakMapScreen._googleSubdomains;
+            _tileAttribution =
+                '${cfg['attribution'] ?? OutbreakMapScreen._googleAttribution}';
+          });
+        }).catchError((_) {});
+      }
       if (mounted) {
         setState(() {
           _facilities = (res['facilities'] as List?) ?? [];
@@ -125,14 +158,14 @@ class _OutbreakMapScreenState extends State<OutbreakMapScreen> {
                     ),
                     children: [
                       TileLayer(
-                        urlTemplate:
-                            'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+                        urlTemplate: _tileUrl,
+                        subdomains: _tileSubdomains,
                         userAgentPackageName: 'zw.org.mohcc.dds_mobile',
                       ),
-                      const SimpleAttributionWidget(
+                      SimpleAttributionWidget(
                         source: Text(
-                          'Esri, TomTom, Garmin, FAO, NOAA, USGS · © OpenStreetMap contributors',
-                          style: TextStyle(fontSize: 10),
+                          _tileAttribution,
+                          style: const TextStyle(fontSize: 10),
                         ),
                       ),
                       if (_showFacilities)

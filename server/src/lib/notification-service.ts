@@ -34,9 +34,10 @@ export async function createNotification(req: Request, input: unknown, opts: { n
       if(rows[0].payload_hash!==hash)throw httpError(409,"Submission changed after it was queued. Keep the original or submit as a new record.")
       if(rows[0].notification_id){await conn.commit();return {notificationId:rows[0].notification_id,replayed:true,mpdsrAlertId:null,alertsCreated:[]}}
     }
-    const [facilities]=await conn.query<any[]>("SELECT facility_id FROM facilities WHERE facility_id=?",[facilityId])
-    const [codes]=await conn.query<any[]>("SELECT icd_code FROM icd_codes WHERE icd_code=?",[d.preliminaryIcdCode])
-    if(!facilities.length||!codes.length)throw httpError(400,"Unknown facility or ICD code")
+    // One round-trip for both existence checks — sequential queries each
+    // cost a full pooled-DB round-trip.
+    const [refs]=await conn.query<any[]>("SELECT (SELECT 1 FROM facilities WHERE facility_id=?) AS f, (SELECT 1 FROM icd_codes WHERE icd_code=?) AS c",[facilityId,d.preliminaryIcdCode])
+    if(!refs[0]?.f||!refs[0]?.c)throw httpError(400,"Unknown facility or ICD code")
     // Reuse the patient row for a known national ID — repeat notifications
     // (facility + mortuary, corrected re-report) shouldn't fork identity.
     // Demographics are not overwritten on match.
@@ -48,8 +49,16 @@ export async function createNotification(req: Request, input: unknown, opts: { n
     if(d.isMaternalPerinatal)await conn.query("INSERT INTO mpdsr_workflows (workflow_id,notification_id,initiated_by,department_notified,notification_timestamp,response_status,review_due_at) VALUES (?,?,?,'Maternal and Perinatal Review Team',NOW(),'notified',NOW()+INTERVAL '7 days')",[newId("mpd"),notificationId,user.userId])
     await conn.commit()
   } catch(error) {await conn.rollback();throw error} finally {conn.release()}
-  await writeAudit(req,{action:"create_death_notification",entityType:"death_notifications",entityId:notificationId,details:{patientId,facilityId}})
+  // Post-commit side effects run detached — the submitter only waits for
+  // the transaction itself. writeAudit degrades gracefully on its own;
+  // detection still creates alerts + realtime pushes in the background.
+  void writeAudit(req,{action:"create_death_notification",entityType:"death_notifications",entityId:notificationId,details:{patientId,facilityId}})
+    .catch(()=>{})
   const mpdsrAlertId=d.isMaternalPerinatal?await checkMpdsr(notificationId):null
-  const alertsCreated=await detectOutbreaksCoalesced(config.outbreakWindowHours, opts.notify ?? true).catch(()=>[])
-  return {notificationId,patientId,mpdsrAlertId,alertsCreated}
+  // The 5-pass detection scan is seconds of DB work — never make the
+  // submitter wait for it. It runs in the background and still creates
+  // alerts + realtime pushes; the client toast only reports MPDSR.
+  void detectOutbreaksCoalesced(config.outbreakWindowHours, opts.notify ?? true)
+    .catch((err) => console.error("[outbreak] post-submit detection failed:", err?.message ?? err))
+  return {notificationId,patientId,mpdsrAlertId,alertsCreated:[]}
 }

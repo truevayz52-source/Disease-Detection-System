@@ -8,7 +8,7 @@ const VERIFY_TTL_MS = 30_000
 
 export const auditRouter = Router()
 
-const VIEWERS = requireRole("public_health_analyst", "system_admin")
+const VIEWERS = requireRole("system_admin")
 
 auditRouter.get("/", requireAuth, VIEWERS, async (req, res) => {
   const page = Math.max(1, Number(req.query.page ?? 1))

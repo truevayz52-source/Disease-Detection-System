@@ -14,7 +14,7 @@ const ReportsPage = lazy(() => import("@/pages/operations").then(m => ({default:
 const SecurityPage = lazy(() => import("@/pages/operations").then(m => ({default:m.SecurityPage})))
 const SettingsPage = lazy(() => import("@/pages/operations").then(m => ({default:m.SettingsPage})))
 const SearchPage = lazy(() => import("@/pages/operations").then(m => ({default:m.SearchPage})))
-const GpsPage = lazy(() => import("@/pages/operations").then(m => ({default:m.GpsPage})))
+
 const PredictionsPage = lazy(() => import("@/pages/predictions"))
 const VoicePage = lazy(() => import("@/pages/operations").then(m => ({default:m.VoicePage})))
 import { Navigate, Outlet, Route, Routes } from "react-router-dom"
@@ -76,15 +76,19 @@ export default function App() {
             <Route element={<RequireRole roles={["medical_officer","mortuary_clerk"]} />}><Route path="/offline-sync" element={<OfflineSync />} /><Route path="/voice-autopsy" element={<VoicePage />} /></Route>
             <Route element={<RequireRole roles={["medical_officer","mortuary_clerk","public_health_analyst"]} />}><Route path="/signals" element={<SignalRegistryPage />} /></Route>
             <Route element={<RequireRole roles={["medical_officer","public_health_analyst"]} />}><Route path="/mpdsr" element={<MpdsrPage />} /><Route path="/cross-border" element={<CrossBorderPage />} /></Route>
-            <Route element={<RequireRole roles={["medical_officer","public_health_analyst"]} />}><Route path="/gps-dashboard" element={<GpsPage />} /></Route>
+
             <Route element={<RequireRole roles={["public_health_analyst"]} />}><Route path="/alert-config" element={<ThresholdPage />} /><Route path="/resource-allocation" element={<ForecastPage />} /></Route>
             <Route element={<RequireRole roles={["public_health_analyst","executive"]} />}><Route path="/reports" element={<ReportsPage />} /><Route path="/executive-dashboard" element={<ExecutivePage />} /></Route>
             <Route element={<RequireRole roles={["system_admin"]} />}><Route path="/security-dashboard" element={<SecurityPage />} /><Route path="/system-settings" element={<SettingsPage />} /></Route>
             <Route element={<RequireRole roles={["medical_officer", "mortuary_clerk", "public_health_analyst"]} />}>
               <Route path="/notifications" element={<NotificationsPage />} />
+            </Route>
+            <Route element={<RequireRole roles={["medical_officer", "mortuary_clerk"]} />}>
               <Route path="/notifications/new" element={<NotificationNewPage />} />
             </Route>
-            <Route path="/notifications/:id" element={<NotificationDetailPage />} />
+            <Route element={<RequireRole roles={["medical_officer","mortuary_clerk","pathologist","public_health_analyst"]} />}>
+              <Route path="/notifications/:id" element={<NotificationDetailPage />} />
+            </Route>
             <Route element={<RequireRole roles={["pathologist"]} />}>
               <Route path="/pathology/queue" element={<PathologyQueuePage />} />
               <Route path="/pathology/review/:id" element={<PathologyReviewPage />} />
@@ -100,10 +104,12 @@ export default function App() {
             <Route element={<RequireRole roles={["public_health_analyst", "executive"]} />}>
               <Route path="/predictions" element={<PredictionsPage />} />
             </Route>
-            <Route element={<RequireRole roles={["public_health_analyst", "system_admin"]} />}>
+            <Route element={<RequireRole roles={["system_admin"]} />}>
               <Route path="/audit" element={<AuditPage />} />
             </Route>
-            <Route path="/alerts" element={<AlertsPage />} />
+            <Route element={<RequireRole roles={["medical_officer","pathologist","public_health_analyst"]} />}>
+              <Route path="/alerts" element={<AlertsPage />} />
+            </Route>
             <Route element={<RequireRole roles={["system_admin"]} />}>
               <Route path="/admin/users" element={<AdminUsersPage />} />
               <Route path="/admin/facilities" element={<AdminFacilitiesPage />} />

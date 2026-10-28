@@ -22,6 +22,40 @@ community reports, audit, etc.) while
 keeping reference data (facilities, provinces, districts, ICD codes, users) —
 use it to start demos from an empty dataset. Also clears `server/uploads/`.
 
+## API latency — pooled-DB rules
+
+Every sequential `query()` costs ~220ms of Supabase round-trip. Rules that
+keep the API feeling instant:
+
+- Parallelize independent queries in a handler with `Promise.all` (see
+  `/notifications` list+detail, `/analytics/geo`).
+- `authenticateLegacy` caches AuthUser per token 45s and throttles the
+  session-expiry bump (fire-and-forget `touchSession`) — don't re-add an
+  awaited UPDATE per request. Revoked sessions can linger up to the TTL.
+- Post-commit side effects in `createNotification` run detached
+  (`writeAudit`, `detectOutbreaksCoalesced`) — never await detection or
+  audit inside a submit path; clients get `alertsCreated: []` and read
+  alerts from /alerts + realtime pushes.
+- Reference data is cached: facilities (60s refresh in facilities.ts).
+
+## DB advisory locks — transaction-scoped ONLY
+
+NEVER use session-level `pg_advisory_lock`/`pg_try_advisory_lock` through
+the Supabase Supavisor transaction pooler: acquire → work → release can land
+on DIFFERENT pooled backends, so locks leak permanently and every caller
+stalls on the wait (observed: `dds_audit_append` stuck for hours → 12s
+logins → "Audit writer busy"). Use `withAdvisoryLock(name, waitSeconds, fn)`
+in `server/src/db.ts` — it wraps the critical section in one transaction
+with `pg_advisory_xact_lock`, which always releases at COMMIT/rollback or
+backend death. For a "single runner" guard (scheduled-reports, migrate
+script) hold an open BEGIN + `pg_try_advisory_xact_lock` on one connection
+while the job runs on others. writeAudit now drops entries gracefully
+(logs `[audit] writer busy — entry dropped`) — audit must never 500 a
+request. Diagnose stuck locks:
+
+  SELECT l.pid FROM pg_locks l WHERE l.locktype='advisory';
+  SELECT pg_terminate_backend(<pid>);   -- kills the stale backend session
+
 ## Early-warning detection
 
 `detectOutbreaks` (`server/src/lib/outbreak.ts`) runs five passes on each
@@ -174,6 +208,28 @@ All live in `analytics/` and run in the shared `C:\dds-venv` venv:
 `{modelVersion, anomalyScore, confidenceScore, regions[]}`; set
 `PATHOLOGY_MODEL` + install `requirements-pathology-ml.txt` for a real HF
 model, otherwise the deterministic heuristic baseline answers.
+
+## Basemap tiles (web + mobile maps)
+
+**Web** (`client/src/pages/analytics-map.tsx`) uses **OpenFreeMap** vector
+tiles via MapLibre GL (`react-map-gl/maplibre`) — free, no API key. Style:
+always `positron` (light) under tiles.openfreemap.org — theme-independent. Markers are
+GeoJSON circle layers (facility rings, category-coloured case dots) with
+hover/click `Popup`s. The sidebar's Find-facility picker cascades province → district → name search and flyTo's + highlights the selection (amber ring); the Facilities dot layer is OFF by default. Two bundler gotchas, both solved in the file/config:
+maplibre's worker must be pinned (`?url` import + `setWorkerUrl`) or the
+bundled asset path 404s, and `optimizeDeps.exclude: ["maplibre-gl"]` in
+`vite.config.ts` keeps dev-mode `import.meta.url` resolution intact.
+
+**Mobile** (`mobile/lib/features/map/outbreak_map_screen.dart`) stays on
+`flutter_map` raster tiles resolved by `server/src/lib/map-tiles.ts` at
+`GET /api/config/map` (requireAuth). Provider chain: `MAP_PROVIDER`
+override (`google-maptiles`|`google-hybrid`|`esri-imagery`|`esri-canvas`)
+→ official Map Tiles API session via `GOOGLE_MAPS_API_KEY` (auto-falls
+back when the API/billing isn't enabled) → key-free Google hybrid
+`lyrs=y` tiles. Style via `MAP_TILE_STYLE` (default `hybrid`). Mobile
+override: `--dart-define DDS_MAP_TILE_URL=...`. The Google key appears in
+tile URLs — restrict it to the Map Tiles API in GCP, don't use referrer
+restrictions (they'd break mobile tile fetches).
 
 ## i18n — locale fallback rule
 

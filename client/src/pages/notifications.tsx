@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { api } from "@/lib/api"
+import { useAuth } from "@/lib/auth"
 import { fmtDate, STATUS_LABELS, STATUS_VARIANTS } from "@/lib/format"
 import type { DeathNotification } from "@/lib/types"
 import { usePreferences } from "@/lib/preferences"
@@ -34,6 +35,8 @@ function exportCsv(items: DeathNotification[], t: (s: string) => string) {
 }
 
 export default function NotificationsPage() {const{t}=usePreferences();
+  const { user } = useAuth()
+  const canCreate = !!user && ["medical_officer", "mortuary_clerk"].includes(user.role)
   const [q, setQ] = useState("")
   const [status, setStatus] = useState("all")
   const [district, setDistrict] = useState("all")
@@ -129,9 +132,11 @@ export default function NotificationsPage() {const{t}=usePreferences();
           <Button variant="outline" size="sm" onClick={() => exportCsv(items, t)} disabled={!items.length}>
             <Download className="size-3.5" /> Export CSV
           </Button>
-          <Button asChild className="ml-auto">
-            <Link to="/notifications/new"><Plus className="size-4" /> {t("New notification")}</Link>
-          </Button>
+          {canCreate && (
+            <Button asChild className="ml-auto">
+              <Link to="/notifications/new"><Plus className="size-4" /> {t("New notification")}</Link>
+            </Button>
+          )}
         </div>
 
         <p className="text-sm text-muted-foreground">{items.length} record(s)</p>

@@ -205,21 +205,6 @@ CREATE TABLE IF NOT EXISTS voice_transcriptions (
   INDEX idx_transcription_notification (notification_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- GPS tracking for field workers
-CREATE TABLE IF NOT EXISTS gps_tracking (
-  tracking_id VARCHAR(36) PRIMARY KEY,
-  user_id VARCHAR(36) NOT NULL,
-  latitude DECIMAL(10,6) NOT NULL,
-  longitude DECIMAL(10,6) NOT NULL,
-  accuracy DECIMAL(10,2),
-  altitude DECIMAL(10,2),
-  tracking_timestamp DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  activity_type VARCHAR(50),
-  CONSTRAINT fk_gps_user FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
-  INDEX idx_gps_user_time (user_id, tracking_timestamp),
-  INDEX idx_gps_location (latitude, longitude)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
 -- System settings and preferences
 CREATE TABLE IF NOT EXISTS system_settings (
   setting_id VARCHAR(36) PRIMARY KEY,

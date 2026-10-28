@@ -1,15 +1,16 @@
 import fs from "node:fs/promises"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
-import { getPool, acquireAdvisoryLock, releaseAdvisoryLock } from "../src/db.js"
+import { getPool, withAdvisoryLock } from "../src/db.js"
 
 // Applies supabase/migrations/*.sql in order, tracked in public.schema_migrations.
 // `supabase db push` is the primary path; this script exists so a plain Node
 // deployment can migrate without the Supabase CLI.
 const directory = fileURLToPath(new URL("../../supabase/migrations/", import.meta.url))
-const conn = await getPool().getConnection()
-try {
-  if (!await acquireAdvisoryLock(conn, "dds_schema_migration", 30)) throw new Error("Another migration is running")
+// The guard transaction stays open on the claim connection while the
+// migration runs on a second one — a leaked session lock can't happen.
+await withAdvisoryLock("dds_schema_migration", 30, async () => {
+  const conn = await getPool().getConnection()
   try {
     await conn.query("CREATE TABLE IF NOT EXISTS schema_migrations (version text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())")
     const [appliedRows] = await conn.query<any[]>("SELECT version FROM schema_migrations")
@@ -30,9 +31,8 @@ try {
       }
     }
   } finally {
-    await releaseAdvisoryLock(conn, "dds_schema_migration")
+    conn.release()
   }
-} finally {
-  conn.release()
-  await getPool().end()
-}
+}).then((r) => {
+  if (!r.acquired) throw new Error("Another migration is running")
+}).finally(() => getPool().end())

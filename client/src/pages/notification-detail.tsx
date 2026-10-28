@@ -47,7 +47,7 @@ export default function NotificationDetailPage() {const{t}=usePreferences();
   }
 
   const n = data?.notification
-  const canUpload = user && ["medical_officer", "pathologist", "public_health_analyst"].includes(user.role)
+  const canUpload = user && ["medical_officer", "pathologist"].includes(user.role)
   const certUrl = `/api/notifications/${id}/certificate?token=${encodeURIComponent(getToken() ?? "")}`
 
   return (

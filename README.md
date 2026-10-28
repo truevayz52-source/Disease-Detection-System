@@ -158,6 +158,9 @@ WHISPER_WS_URL=                # optional; derived from WHISPER_URL (/stream)
 TRANSLATE_PROVIDER=gemini      # external AI provider for translate + AI assists
 TRANSLATE_MODEL=gemini-3.1-flash-lite
 GEMINI_API_KEY=                # server-side only; never shipped to clients
+GOOGLE_MAPS_API_KEY=           # basemap tiles (Map Tiles API); free Google hybrid tiles used until enabled
+MAP_PROVIDER=                  # force: google-maptiles | google-hybrid | esri-imagery | esri-canvas
+MAP_TILE_STYLE=hybrid          # hybrid | satellite | roadmap | terrain
 ```
 
 ### External AI calls — privacy guards

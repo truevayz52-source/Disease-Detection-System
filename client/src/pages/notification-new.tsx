@@ -105,6 +105,82 @@ function IcdPicker({ value, onPick }: { value: string; onPick: (code: string, de
   )
 }
 
+// Searchable facility combobox — the list is too long to scroll through.
+function FacilityPicker({
+  facilities,
+  value,
+  onPick,
+  invalid,
+}: {
+  facilities: Facility[]
+  value: string
+  onPick: (id: string) => void
+  invalid?: boolean
+}) {
+  const { t } = usePreferences()
+  const [q, setQ] = useState("")
+  const [open, setOpen] = useState(false)
+  const selected = facilities.find((f) => f.facility_id === value)
+
+  const matches = useMemo(() => {
+    const s = q.trim().toLowerCase()
+    const list = s
+      ? facilities.filter((f) =>
+          `${f.facility_name} ${f.district} ${f.province}`.toLowerCase().includes(s),
+        )
+      : facilities
+    return list.slice(0, 100)
+  }, [q, facilities])
+
+  return (
+    <div className="relative">
+      <Input
+        id="facility"
+        placeholder={t("Search facility by name, district or province…")}
+        value={open ? q : selected ? `${selected.facility_name} — ${selected.district}` : ""}
+        aria-invalid={invalid || undefined}
+        onFocus={() => {
+          setOpen(true)
+          setQ("")
+        }}
+        onChange={(e) => setQ(e.target.value)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+      />
+      {open && (
+        <ul className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-md border bg-popover p-1 shadow-md">
+          {matches.length === 0 && (
+            <li className="px-2 py-1.5 text-sm text-muted-foreground">{t("No facilities match your search")}</li>
+          )}
+          {matches.map((f) => (
+            <li key={f.facility_id}>
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent"
+                onMouseDown={() => {
+                  onPick(f.facility_id)
+                  setOpen(false)
+                }}
+              >
+                <span className="flex-1">
+                  {f.facility_name} — {f.district}
+                </span>
+                <span className="text-xs text-muted-foreground">{f.province}</span>
+              </button>
+            </li>
+          ))}
+          {matches.length === 100 && (
+            <li className="px-2 py-1 text-xs text-muted-foreground">{t("Keep typing to narrow the list…")}</li>
+          )}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+function FieldError({ msg }: { msg?: string }) {
+  return msg ? <p className="text-xs text-destructive">{msg}</p> : null
+}
+
 export default function NotificationNewPage() {const{t}=usePreferences();
   const navigate = useNavigate()
   const { user } = useAuth()
@@ -115,6 +191,7 @@ export default function NotificationNewPage() {const{t}=usePreferences();
   })
   const [icdDesc, setIcdDesc] = useState("")
   const [submitting, setSubmitting] = useState(false)
+  const [attemptedSteps, setAttemptedSteps] = useState<Set<number>>(new Set())
   const { data: facilities } = useSWR<{ items: Facility[] }>("/facilities", (u: string) => api(u))
 
   const draftRestored = useMemo(() => loadDraft() !== null, [])
@@ -134,8 +211,51 @@ export default function NotificationNewPage() {const{t}=usePreferences();
     setForm((f) => ({ ...f, [key]: value }))
   }
 
-  const step1Valid = form.fullName.trim().length >= 2 && !!form.gender
-  const step2Valid = !!form.facilityId && !!form.dateOfDeath && !!form.icdCode
+  // Mirrors the server-side notification schema (notification-service.ts):
+  // fullName 2–255 letters, nationalId ≤60, age int 0–150, address ≤512,
+  // summary ≤8000, date of death not in the future.
+  const errors = useMemo(() => {
+    const e: Partial<Record<keyof FormState, string>> = {}
+    const name = form.fullName.trim()
+    if (name.length > 0 && name.length < 2) e.fullName = "Full name must be at least 2 characters"
+    else if (name.length > 255) e.fullName = "Full name cannot exceed 255 characters"
+    else if (name.length > 0 && !/^[\p{L}\s.'-]+$/u.test(name)) e.fullName = "Full name may only contain letters, spaces, hyphens and apostrophes"
+    const nid = form.nationalId.trim()
+    if (nid.length > 60) e.nationalId = "National ID cannot exceed 60 characters"
+    else if (nid && !/^\d{2}-\d{5,8}[A-Za-z]\d{2}$/.test(nid))
+      e.nationalId = "National ID must follow the format 63-204918A12"
+    if (form.age !== "") {
+      if (!/^\d+$/.test(form.age.trim())) e.age = "Age must be a whole number"
+      else if (Number(form.age) > 150) e.age = "Age must be between 0 and 150"
+    }
+    const addr = form.residentialAddress.trim()
+    if (addr.length > 512) e.residentialAddress = "Address cannot exceed 512 characters"
+    else if (addr && !/^[\p{L}\p{N}\s,.'#/()-]+$/u.test(addr))
+      e.residentialAddress = "Address contains invalid characters"
+    else if (addr && !/\p{L}{2}/u.test(addr))
+      e.residentialAddress = "Address must include a street or place name"
+    else if (addr && addr.replace(/[^\p{L}\p{N} ]/gu, " ").trim().split(/\s+/).filter(Boolean).length < 2)
+      e.residentialAddress = "Enter a fuller address (e.g. street and suburb or city)"
+    if (form.clinicalSummary.length > 8000) e.clinicalSummary = "Summary cannot exceed 8000 characters"
+    if (form.dateOfDeath && Date.parse(form.dateOfDeath) > Date.now()) e.dateOfDeath = "Date of death cannot be in the future"
+    return e
+  }, [form])
+
+  const showErr = (key: keyof FormState) => attemptedSteps.has(step) || !!form[key]
+
+  const step1Valid =
+    form.fullName.trim().length >= 2 &&
+    !errors.fullName &&
+    !errors.nationalId &&
+    !errors.age &&
+    !errors.residentialAddress &&
+    !!form.gender
+  const step2Valid =
+    !!form.facilityId &&
+    !!form.dateOfDeath &&
+    !errors.dateOfDeath &&
+    !!form.icdCode &&
+    !errors.clinicalSummary
 
   async function submit() {
     setSubmitting(true)
@@ -224,37 +344,53 @@ export default function NotificationNewPage() {const{t}=usePreferences();
           <Card className="shadow-lg">
             <CardHeader>
               <CardTitle className="text-base">{t("Patient demographics")}</CardTitle>
-              <CardDescription>{t("Deceased person's identity details (Ch 4.2)")}</CardDescription>
+              <CardDescription>{t("Deceased person's identity details")}</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2 sm:col-span-2">
                 <Label htmlFor="fullName">{t("Full name *")}</Label>
-                <Input id="fullName" value={form.fullName} onChange={(e) => set("fullName", e.target.value)} />
+                <Input
+                  id="fullName"
+                  maxLength={255}
+                  aria-invalid={!!errors.fullName || (attemptedSteps.has(step) && !form.fullName.trim())}
+                  value={form.fullName}
+                  onChange={(e) => set("fullName", e.target.value)}
+                />
+                <FieldError
+                  msg={
+                    errors.fullName ??
+                    (attemptedSteps.has(step) && !form.fullName.trim() ? t("Full name is required") : undefined)
+                  }
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="nationalId">{t("National ID")}</Label>
-                <Input id="nationalId" value={form.nationalId} onChange={(e) => set("nationalId", e.target.value)} placeholder={t("63-204918A12")} />
+                <Input id="nationalId" maxLength={60} aria-invalid={!!errors.nationalId} value={form.nationalId} onChange={(e) => set("nationalId", e.target.value)} placeholder={t("63-204918A12")} />
+                <FieldError msg={showErr("nationalId") ? errors.nationalId : undefined} />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="age">{t("Age")}</Label>
-                  <Input id="age" type="number" min={0} max={150} value={form.age} onChange={(e) => set("age", e.target.value)} />
+                  <Input id="age" type="number" min={0} max={150} aria-invalid={!!errors.age} value={form.age} onChange={(e) => set("age", e.target.value)} />
+                  <FieldError msg={showErr("age") ? errors.age : undefined} />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="gender">{t("Gender *")}</Label>
                   <Select value={form.gender} onValueChange={(v) => set("gender", v ?? "")}>
-                    <SelectTrigger id="gender"><SelectValue placeholder={t("Select")} /></SelectTrigger>
+                    <SelectTrigger id="gender" aria-invalid={attemptedSteps.has(step) && !form.gender}><SelectValue placeholder={t("Select")} /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="male">{t("Male")}</SelectItem>
                       <SelectItem value="female">{t("Female")}</SelectItem>
                       <SelectItem value="other">{t("Other")}</SelectItem>
                     </SelectContent>
                   </Select>
+                  <FieldError msg={attemptedSteps.has(step) && !form.gender ? t("Gender is required") : undefined} />
                 </div>
               </div>
               <div className="space-y-2 sm:col-span-2">
                 <Label htmlFor="address">{t("Residential address")}</Label>
-                <Input id="address" value={form.residentialAddress} onChange={(e) => set("residentialAddress", e.target.value)} />
+                <Input id="address" maxLength={512} aria-invalid={!!errors.residentialAddress} value={form.residentialAddress} onChange={(e) => set("residentialAddress", e.target.value)} />
+                <FieldError msg={showErr("residentialAddress") ? errors.residentialAddress : undefined} />
               </div>
             </CardContent>
           </Card>
@@ -269,31 +405,31 @@ export default function NotificationNewPage() {const{t}=usePreferences();
             <CardContent className="grid gap-4">
               <div className="space-y-2">
                 <Label htmlFor="facility">{t("Reporting facility *")}</Label>
-                <Select value={form.facilityId} onValueChange={(v) => set("facilityId", v ?? "")}>
-                  <SelectTrigger id="facility">
-                    <SelectValue placeholder={t("Select facility")}>
-                      {(v: string) => {
-                        const f = facilities?.items.find((x) => x.facility_id === v)
-                        return f ? `${f.facility_name} — ${f.district}` : v
-                      }}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(facilities?.items ?? []).map((f) => (
-                      <SelectItem key={f.facility_id} value={f.facility_id}>
-                        {f.facility_name} — {f.district}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <FacilityPicker
+                  facilities={facilities?.items ?? []}
+                  value={form.facilityId}
+                  invalid={attemptedSteps.has(step) && !form.facilityId}
+                  onPick={(id) => set("facilityId", id)}
+                />
+                <FieldError
+                  msg={attemptedSteps.has(step) && !form.facilityId ? t("Reporting facility is required") : undefined}
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="dod">{t("Date & time of death *")}</Label>
                 <Input
                   id="dod"
                   type="datetime-local"
+                  max="9999-12-31T23:59"
+                  aria-invalid={!!errors.dateOfDeath || (attemptedSteps.has(step) && !form.dateOfDeath)}
                   value={form.dateOfDeath}
                   onChange={(e) => set("dateOfDeath", e.target.value)}
+                />
+                <FieldError
+                  msg={
+                    errors.dateOfDeath ??
+                    (attemptedSteps.has(step) && !form.dateOfDeath ? t("Date of death is required") : undefined)
+                  }
                 />
               </div>
               <div className="space-y-2">
@@ -305,16 +441,22 @@ export default function NotificationNewPage() {const{t}=usePreferences();
                     setIcdDesc(desc)
                   }}
                 />
+                <FieldError
+                  msg={attemptedSteps.has(step) && !form.icdCode ? t("Preliminary cause of death is required") : undefined}
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="summary">{t("Clinical summary")}</Label>
                 <Textarea
                   id="summary"
                   rows={4}
+                  maxLength={8000}
+                  aria-invalid={!!errors.clinicalSummary}
                   value={form.clinicalSummary}
                   onChange={(e) => set("clinicalSummary", e.target.value)}
                   placeholder={t("Brief clinical history and circumstances of death…")}
                 />
+                <FieldError msg={errors.clinicalSummary} />
               </div>
               <label className="flex items-center gap-2 text-sm">
                 <Checkbox
@@ -367,7 +509,17 @@ export default function NotificationNewPage() {const{t}=usePreferences();
             <ChevronLeft className="size-4" /> Back
           </Button>
           {step < 2 ? (
-            <Button onClick={() => setStep((s) => s + 1)} disabled={step === 0 ? !step1Valid : !step2Valid}>
+            <Button
+              onClick={() => {
+                const valid = step === 0 ? step1Valid : step2Valid
+                if (!valid) {
+                  setAttemptedSteps((s) => new Set(s).add(step))
+                  toast.error(t("Please correct the highlighted fields before continuing."))
+                  return
+                }
+                setStep((s) => s + 1)
+              }}
+            >
               Next <ChevronRight className="size-4" />
             </Button>
           ) : (

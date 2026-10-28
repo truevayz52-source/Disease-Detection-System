@@ -79,6 +79,7 @@ export default function SignalRegistryPage() {const{t}=usePreferences();
     district: "", province: "", facilityId: "", severity: "medium", description: "",
   })
   const canTriage = user && ["public_health_analyst"].includes(user.role)
+  const canCreate = user && ["medical_officer", "mortuary_clerk"].includes(user.role)
   const { data, mutate } = useSWR<{ items: Signal[] }>(`/signals?status=${status}`, (u: string) => api(u))
   const { data: playbooks } = useSWR<{ items: Playbook[] }>("/playbooks", (u: string) => api(u))
   const { data: facilities } = useSWR<{ items: Facility[] }>("/facilities", (u: string) => api(u))
@@ -200,7 +201,9 @@ export default function SignalRegistryPage() {const{t}=usePreferences();
           <Button variant="outline" size="sm" onClick={() => mutate()}><RefreshCw className="size-3.5" /> {t("Refresh")}</Button>
           <p className="text-sm text-muted-foreground">{data?.items.length ?? 0} signal(s)</p>
           <div className="ml-auto">
-            <Button size="sm" onClick={() => setOpen(true)}><Plus className="size-4" /> {t("New signal")}</Button>
+            {["medical_officer", "mortuary_clerk", "public_health_analyst"].includes(user?.role ?? "") && (
+              <Button size="sm" onClick={() => setOpen(true)}><Plus className="size-4" /> {t("New signal")}</Button>
+            )}
           </div>
         </div>
 
@@ -270,7 +273,7 @@ export default function SignalRegistryPage() {const{t}=usePreferences();
                 <div className="flex items-center gap-2">
                   {/* Conversion is gated on verification — an unverified signal
                       must not become an official death record. */}
-                  {DEATH_SIGNAL_TYPES.includes(s.signal_type) && (s.workflow_stage === "verified" || s.workflow_stage === "escalated") && (
+                  {canCreate && DEATH_SIGNAL_TYPES.includes(s.signal_type) && (s.workflow_stage === "verified" || s.workflow_stage === "escalated") && (
                     <Button size="sm" variant="secondary" onClick={() => createFromSignal(s)}>
                       <FilePlus2 className="size-3.5" /> {t("Create notification")}
                     </Button>

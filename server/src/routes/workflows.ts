@@ -162,7 +162,7 @@ workflowsRouter.delete("/alerts/thresholds/:id",analysts,async(req,res)=>{
   await query("DELETE FROM alert_thresholds WHERE threshold_id=?",[req.params.id]);await writeAudit(req,{action:"delete_threshold",entityType:"alert_thresholds",entityId:req.params.id});res.json({ok:true})
 })
 workflowsRouter.get("/cross-border/cases",clinical,async(req,res)=>{
-  res.json({items:await query(`SELECT c.*,f.district FROM cross_border_cases c JOIN death_notifications dn ON dn.notification_id=c.notification_id JOIN facilities f ON f.facility_id=dn.facility_id ${facilityScoped(req.user!)?"WHERE dn.facility_id=?":""} ORDER BY c.created_at DESC LIMIT 200`,facilityScoped(req.user!)?[req.user!.facilityId]:[])})
+  res.json({items:await query(`SELECT c.*,f.district,p.full_name AS patient_name,dn.preliminary_icd_code FROM cross_border_cases c JOIN death_notifications dn ON dn.notification_id=c.notification_id JOIN patients p ON p.patient_id=dn.patient_id JOIN facilities f ON f.facility_id=dn.facility_id ${facilityScoped(req.user!)?"WHERE dn.facility_id=?":""} ORDER BY c.created_at DESC LIMIT 200`,facilityScoped(req.user!)?[req.user!.facilityId]:[])})
 })
 workflowsRouter.post("/cross-border/mark",clinical,async(req,res)=>{
   const d=z.object({notificationId:z.string().max(36),sourceCountry:z.string().min(2).max(100),borderCrossingPoint:z.string().max(255),travelHistory:z.string().max(4000)}).parse(req.body)

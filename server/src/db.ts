@@ -84,11 +84,21 @@ const realPool = new Pool({
   max: 10,
   idleTimeoutMillis: 60000,
   keepAlive: true,
+  // Fail fast when the pool is exhausted instead of queueing a request
+  // forever — a stuck backend would otherwise hang HTTP calls silently.
+  connectionTimeoutMillis: 10000,
   // Session time zone pinned in the startup packet so now()/CURRENT_DATE in
   // the detection queries don't drift with the DB server's TZ. Replaces a
   // per-connect SET query — client.query() inside the pool 'connect' event
   // trips pg's "already executing a query" deprecation warning.
   options: `-c timezone=${config.dbTimeZone}`,
+})
+
+// Idle pooled clients dropped by the network/Supavisor emit 'error' on the
+// pool — without a listener the process crashes on ECONNRESET. pg removes
+// the dead client itself; active queries still reject normally.
+realPool.on("error", (err) => {
+  console.error("[db] idle client dropped:", err.message)
 })
 
 /** A mysql2-PoolConnection-shaped wrapper around a pg.PoolClient. */
@@ -138,21 +148,55 @@ export function getPool() {
   return pool
 }
 
-/** Postgres advisory-lock equivalent of MySQL GET_LOCK(name, timeout):
- *  retries pg_try_advisory_lock until the deadline. Session-scoped like
- *  GET_LOCK, so callers must hold the same pooled connection. */
-export async function acquireAdvisoryLock(conn: PgConnection, name: string, timeoutSeconds = 10): Promise<boolean> {
-  const deadline = Date.now() + timeoutSeconds * 1000
-  for (;;) {
-    const [rows] = await conn.query<any[]>("SELECT pg_try_advisory_lock(hashtextextended(?, 0)) AS acquired", [name])
-    if (rows[0]?.acquired) return true
-    if (Date.now() >= deadline) return false
-    await new Promise((r) => setTimeout(r, 100))
-  }
-}
+/** Runs fn inside a transaction guarded by a named advisory lock.
+ *
+ *  Uses TRANSACTION-scoped locks (pg_*_xact_lock), never session-scoped:
+ *  through Supavisor's transaction pooler a session lock can end up held by
+ *  a pooled backend connection that outlives the client — it then blocks
+ *  every caller until the backend dies. A transaction lock always releases
+ *  on COMMIT/rollback or backend death, so it cannot leak.
+ *
+ *  waitSeconds bounds the wait via lock_timeout; 0 = a single non-blocking
+ *  try. Returns { acquired: false } when the lock couldn't be taken. */
+export type AdvisoryLockOutcome<T> = { acquired: true; value: T } | { acquired: false }
 
-export async function releaseAdvisoryLock(conn: PgConnection, name: string): Promise<void> {
-  await conn.query("SELECT pg_advisory_unlock(hashtextextended(?, 0))", [name])
+export async function withAdvisoryLock<T>(
+  name: string,
+  waitSeconds: number,
+  fn: (conn: PgConnection) => Promise<T>,
+): Promise<AdvisoryLockOutcome<T>> {
+  const conn = await pool.getConnection()
+  try {
+    await conn.query("BEGIN")
+    const [tryRows] = await conn.query<any[]>(
+      "SELECT pg_try_advisory_xact_lock(hashtextextended(?, 0)) AS a",
+      [name],
+    )
+    let acquired = tryRows[0]?.a === true
+    if (!acquired && waitSeconds > 0) {
+      try {
+        await conn.query("SELECT set_config('lock_timeout', ?, true)", [String(Math.round(waitSeconds * 1000))])
+        await conn.query("SELECT pg_advisory_xact_lock(hashtextextended(?, 0))", [name])
+        acquired = true
+      } catch {
+        acquired = false
+      }
+    }
+    if (!acquired) {
+      await conn.query("ROLLBACK").catch(() => {})
+      return { acquired: false }
+    }
+    try {
+      const value = await fn(conn)
+      await conn.query("COMMIT")
+      return { acquired: true, value }
+    } catch (error) {
+      await conn.query("ROLLBACK").catch(() => {})
+      throw error
+    }
+  } finally {
+    conn.release()
+  }
 }
 
 export function newId(prefix: string) {

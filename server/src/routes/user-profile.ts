@@ -145,7 +145,12 @@ userProfileRouter.get("/preferences", requireAuth, async (req, res) => {
   )
   const prefs: Record<string, any> = {}
   for (const pref of preferences) {
-    prefs[pref.preference_key] = typeof pref.preference_value === "string" ? JSON.parse(pref.preference_value) : pref.preference_value
+    try {
+      prefs[pref.preference_key] = typeof pref.preference_value === "string" ? JSON.parse(pref.preference_value) : pref.preference_value
+    } catch {
+      // Legacy/plain-string rows (e.g. raw "light") — return as-is.
+      prefs[pref.preference_key] = pref.preference_value
+    }
   }
   res.json({ preferences: prefs })
 })
