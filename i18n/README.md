@@ -105,6 +105,17 @@ Notes:
   native speakers / MOHCC language services. Clinical terminology requires
   professional validation before production use.
 
+## DOM-level localisation (web client)
+
+`client/src/lib/dom-localize.ts` (`useLocalizedDom`, mounted in
+`PreferencesProvider`) translates literal text nodes and `placeholder`/`title`/
+`aria-label` attributes that never went through `t()` — a MutationObserver +
+TreeWalker sweep over `document.body`. Originals are kept in a `WeakMap` (and
+`data-i18n-*` for attributes) so switching back to English restores source
+text; `SCRIPT`/`STYLE`/`CODE`/`PRE`/`TEXTAREA` and any `[data-i18n-skip]`
+subtree are left alone. Untranslated literals stay English — add them to the
+dictionaries via `pnpm i18n:scan`/`i18n:build`, or wrap hot spots in `t()`.
+
 ## Dynamic text translation
 
 Static dictionaries cover UI chrome only. Record text (autopsy findings,

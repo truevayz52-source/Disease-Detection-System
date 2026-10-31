@@ -1,22 +1,13 @@
-import { useEffect, useState } from "react"
 import { Link } from "react-router-dom"
 import { Bell } from "lucide-react"
 import useSWR from "swr"
 import { api } from "@/lib/api"
-import { useAuth } from "@/lib/auth"
+import { useRealtime } from "@/lib/realtime"
 import { usePreferences } from "@/lib/preferences"
 
 export function NotificationBell() {const{t}=usePreferences();
-  const { user } = useAuth()
-  const { data, mutate } = useSWR<any>("/inbox", api, { refreshInterval: 60000 })
-  const [connected, setConnected] = useState(false)
-
-  // WebSocket will be implemented in future phase
-  // For now, use polling only
-  useEffect(() => {
-    if (!user) return
-    setConnected(true) // Simulate connection for UI
-  }, [user])
+  const { data } = useSWR<any>("/inbox", api, { refreshInterval: 60000 })
+  const { connected } = useRealtime()
 
   return (
     <Link

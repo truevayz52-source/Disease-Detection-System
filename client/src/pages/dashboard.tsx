@@ -1,11 +1,13 @@
 import { Link } from "react-router-dom"
 import useSWR from "swr"
-import { Activity, AlertTriangle, Baby, ClipboardList, FileCheck, Hourglass, Plus } from "lucide-react"
+import { Activity, AlertTriangle, Baby, ClipboardList, FileCheck, Hourglass, Plus, Siren } from "lucide-react"
 import {
   Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Legend,
   Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts"
 import { SiteHeader } from "@/components/site-header"
+import { AlertAnnouncer } from "@/components/alert-announcer"
+import { InfoTooltip } from "@/components/info-tooltip"
 import { StatCard } from "@/components/stat-card"
 import { DepthDefs, grad, shadow } from "@/components/chart-3d"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -54,13 +56,18 @@ export default function DashboardPage() {const{t}=usePreferences();
   const { user } = useAuth()
   const { data } = useSWR<DashboardData>("/analytics/dashboard", fetcher, { refreshInterval: 60_000 })
   const { data: notifications } = useSWR<{ items: DeathNotification[] }>("/notifications", fetcher)
-  const { data: alerts } = useSWR<{ items: OutbreakAlert[] }>("/alerts?status=active", fetcher)
+  const { data: alerts, mutate: mutateAlerts } = useSWR<{ items: OutbreakAlert[] }>("/alerts?status=active", fetcher, { refreshInterval: 30_000 })
 
   const k = data?.kpis
+  const alertTypeName = (a: OutbreakAlert) =>
+    a.alert_type === "mpdsr" ? "MPDSR" : a.alert_type === "early_warning" ? t("Early warning") : t("Outbreak")
+  const alertsSub = (alerts?.items ?? [])
+    .map((a) => `${alertTypeName(a)}: ${a.disease_category} — ${a.district}`)
+    .join(", ") || undefined
   const kpis = [
     { label: t("Deaths (7 days)"), value: k?.deathsLast7Days, icon: Activity, delta: pctChange(k?.deathsLast7Days ?? 0, k?.deathsPrev7Days ?? 0), color: "rose" as const },
-    { label: t("Pending reviews"), value: k?.pendingReviews, icon: Hourglass, color: "amber" as const },
-    { label: t("Active alerts"), value: k?.activeAlerts, icon: AlertTriangle, pulse: (k?.activeAlerts ?? 0) > 0, color: "red" as const },
+    { label: t("Pending reviews"), value: k?.pendingReviews, icon: Hourglass, color: "amber" as const, to: "/notifications?status=pending_review" },
+    { label: t("Active alerts"), value: k?.activeAlerts, icon: AlertTriangle, pulse: (k?.activeAlerts ?? 0) > 0, color: "red" as const, sub: alertsSub },
     { label: t("Finalized autopsies"), value: k?.finalizedAutopsies, icon: FileCheck, color: "emerald" as const },
     { label: t("MPDSR cases (30d)"), value: k?.mpdsrLast30Days, icon: Baby, delta: pctChange(k?.mpdsrLast30Days ?? 0, k?.mpdsrPrev30Days ?? 0), color: "purple" as const },
     { label: t("Total notifications"), value: k?.totalNotifications, icon: ClipboardList, color: "blue" as const },
@@ -68,6 +75,32 @@ export default function DashboardPage() {const{t}=usePreferences();
 
   const categoryTotal = data?.byCategory.reduce((a, c) => a + c.count, 0) ?? 0
   const canCreate = user && ["medical_officer", "mortuary_clerk"].includes(user.role)
+
+  // Objective 2 — early outbreak detection, shown passively: a live
+  // surveillance strip plus automatic anomaly flags naming what was caught.
+  const detections = (alerts?.items ?? []).filter((a) => a.alert_type !== "mpdsr")
+  const monitoredProvinces = data?.byProvince.length ?? 0
+
+  // Objective 3 — cause-of-death patterns: group ICD categories into an
+  // etiology mix and generate plain-language takeaways from live data.
+  const catGroup = (c: string) =>
+    c.startsWith("Infectious") ? "infectious"
+    : c === "Maternal" || c === "Perinatal" ? "maternal"
+    : c === "Ill-defined" || c.startsWith("External") ? "undetermined"
+    : "chronic"
+  const groupCounts = (data?.byCategory ?? []).reduce<Record<string, number>>((acc, c) => {
+    const g = catGroup(c.category)
+    acc[g] = (acc[g] ?? 0) + c.count
+    return acc
+  }, {})
+  const share = (g: string) => (categoryTotal ? Math.round(((groupCounts[g] ?? 0) / categoryTotal) * 100) : 0)
+  const topCat = data?.byCategory?.[0]
+  const topProv = data?.byProvince?.[0]
+  const weekDelta = pctChange(k?.deathsLast7Days ?? 0, k?.deathsPrev7Days ?? 0)
+  const insights: string[] = []
+  if (topCat && categoryTotal) insights.push(t("Pattern:") + ` ${topCat.category} ${t("is the leading reported cause category")} — ${Math.round((topCat.count / categoryTotal) * 100)}% ${t("of deaths in the last 90 days")}.`)
+  if (topProv) insights.push(t("Geographic:") + ` ${topProv.province} ${t("accounts for the largest share of reported deaths")} (${topProv.count}).`)
+  if (weekDelta !== null) insights.push(t("Velocity:") + ` ${t("reported deaths are")} ${weekDelta >= 0 ? "+" : ""}${weekDelta}% ${t("vs the previous 7 days")}.`)
 
   return (
     <>
@@ -90,10 +123,39 @@ export default function DashboardPage() {const{t}=usePreferences();
           )}
         </div>
 
+        {/* Objective 2 — live surveillance strip + automatic anomaly flags:
+            the page itself announces that early detection is running and
+            names what it caught, without anyone narrating it. */}
+        <div className="rounded-2xl border border-border/90 bg-card px-5 py-4 shadow-lg space-y-2">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <span className="relative flex size-2.5">
+              <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex size-2.5 rounded-full bg-emerald-500" />
+            </span>
+            <p className="text-xs font-semibold text-foreground">
+              {t("Early-warning surveillance active")} — {t("monitoring")} {monitoredProvinces} {t("reporting provinces")}
+            </p>
+            <span className="text-xs text-muted-foreground">
+              {detections.length} {t("detection(s) raised")} · {k?.mpdsrLast30Days ?? 0} {t("MPDSR")}
+            </span>
+          </div>
+          {detections.slice(0, 2).map((a) => (
+            <p key={a.alert_id} className="flex items-center gap-2 text-xs font-medium text-red-600">
+              <Siren className="size-3.5" />
+              {t("Early detection trigger")}: {a.disease_category} — {a.district} · {a.case_count} {t("case(s) on record")}
+            </p>
+          ))}
+        </div>
+
+        {/* Audible alert announcer — speaks the active alert set until the
+            duty analyst acknowledges, opens triage, re-runs detection or
+            resolves an alert. */}
+        <AlertAnnouncer alerts={alerts?.items ?? []} onChanged={() => mutateAlerts()} />
+
         {/* KPI cards with % deltas */}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           {kpis.map((kpi) => (
-            <StatCard key={kpi.label} {...kpi} />
+            (kpi as { to?: string }).to ? <Link key={kpi.label} to={(kpi as { to?: string }).to!}><StatCard {...kpi} /></Link> : <StatCard key={kpi.label} {...kpi} />
           ))}
         </div>
 
@@ -101,7 +163,7 @@ export default function DashboardPage() {const{t}=usePreferences();
         <div className="grid gap-6 lg:grid-cols-3">
           <Card className="lg:col-span-2 bg-card border border-border/90 shadow-lg rounded-2xl overflow-hidden">
             <CardHeader className="border-b border-slate-100 bg-muted/50 px-5 py-4">
-              <CardTitle className="text-sm font-bold text-foreground">{t("Mortality trend — last 30 days")}</CardTitle>
+              <CardTitle className="text-sm font-bold text-foreground flex items-center gap-1.5">{t("Mortality trend — last 30 days")}<InfoTooltip text={t("Daily reported deaths — this is the series the forecast model projects forward.")} /></CardTitle>
               <p className="text-xs text-muted-foreground mt-0.5">{t("Daily notified deaths nationwide")}</p>
             </CardHeader>
             <CardContent className="p-4">
@@ -153,7 +215,7 @@ export default function DashboardPage() {const{t}=usePreferences();
         <div className="grid gap-6 lg:grid-cols-3">
           <Card className="bg-card border border-border/90 shadow-lg rounded-2xl overflow-hidden">
             <CardHeader className="border-b border-slate-100 bg-muted/50 px-5 py-4">
-              <CardTitle className="text-sm font-bold text-foreground">{t("Deaths by category")}</CardTitle>
+              <CardTitle className="text-sm font-bold text-foreground flex items-center gap-1.5">{t("Deaths by category")}<InfoTooltip text={t("Cause-of-death mix over the last 90 days, grouped by ICD-10 category.")} /></CardTitle>
               <p className="text-xs text-muted-foreground mt-0.5">{t("90-day share of disease categories")}</p>
             </CardHeader>
             <CardContent className="p-4">
@@ -169,12 +231,22 @@ export default function DashboardPage() {const{t}=usePreferences();
                   <Legend iconSize={8} wrapperStyle={{ fontSize: 11 }} />
                 </PieChart>
               </ResponsiveContainer>
+              {/* Objective 3 — etiology breakdown badges under the donut */}
+              {!!categoryTotal && (
+                <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-slate-100 pt-3">
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{t("ICD-10 etiology mix")}</span>
+                  {share("infectious") > 0 && <Badge variant="outline" className="text-[10px]">{t("Infectious")} {share("infectious")}%</Badge>}
+                  {share("chronic") > 0 && <Badge variant="outline" className="text-[10px]">{t("Non-communicable")} {share("chronic")}%</Badge>}
+                  {share("maternal") > 0 && <Badge variant="outline" className="text-[10px]">{t("Maternal/Perinatal")} {share("maternal")}%</Badge>}
+                  {share("undetermined") > 0 && <Badge variant="outline" className="text-[10px]">{t("Undetermined")} {share("undetermined")}%</Badge>}
+                </div>
+              )}
             </CardContent>
           </Card>
 
           <Card className="lg:col-span-2 bg-card border border-border/90 shadow-lg rounded-2xl overflow-hidden">
             <CardHeader className="border-b border-slate-100 bg-muted/50 px-5 py-4">
-              <CardTitle className="text-sm font-bold text-foreground">{t("Deaths by province")}</CardTitle>
+              <CardTitle className="text-sm font-bold text-foreground flex items-center gap-1.5">{t("Deaths by province")}<InfoTooltip text={t("Geographic death counts — feeds the district cluster surveillance that raises alerts.")} /></CardTitle>
               <p className="text-xs text-muted-foreground mt-0.5">{t("90-day distribution across the 10 provinces")}</p>
             </CardHeader>
             <CardContent className="p-4">
@@ -191,6 +263,21 @@ export default function DashboardPage() {const{t}=usePreferences();
             </CardContent>
           </Card>
         </div>
+
+        {/* Objective 3 — automated pattern insights: the system writes its
+            own takeaways from the live aggregates. */}
+        {insights.length > 0 && (
+          <Card className="bg-card border border-border/90 shadow-lg rounded-2xl">
+            <CardContent className="flex flex-col gap-2 px-5 py-4 sm:flex-row sm:items-start sm:gap-6">
+              <p className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground sm:pt-0.5">{t("Pattern insights")}</p>
+              <ul className="space-y-1">
+                {insights.map((line) => (
+                  <li key={line} className="text-xs text-foreground leading-relaxed">{line}</li>
+                ))}
+              </ul>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Recent notifications + active alerts */}
         <div className="grid gap-6 lg:grid-cols-3">

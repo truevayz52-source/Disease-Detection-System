@@ -5,7 +5,7 @@ import { getPool, newId } from "../db.js"
 import { config } from "../config.js"
 import { facilityScoped } from "./access.js"
 import { writeAudit } from "./audit.js"
-import { reviewSlaHours } from "./case-workflow.js"
+import { reviewSlaHours, autoAssignPendingReviews } from "./case-workflow.js"
 import { checkMpdsr, detectOutbreaksCoalesced } from "./outbreak.js"
 
 export const notificationSchema=z.object({
@@ -59,6 +59,7 @@ export async function createNotification(req: Request, input: unknown, opts: { n
   // submitter wait for it. It runs in the background and still creates
   // alerts + realtime pushes; the client toast only reports MPDSR.
   void detectOutbreaksCoalesced(config.outbreakWindowHours, opts.notify ?? true)
+  void autoAssignPendingReviews().catch(() => 0)
     .catch((err) => console.error("[outbreak] post-submit detection failed:", err?.message ?? err))
   return {notificationId,patientId,mpdsrAlertId,alertsCreated:[]}
 }

@@ -1,0 +1,162 @@
+[
+  {
+    "patient": { "nationalId": "63-7120493C81", "fullName": "Chido Mukono", "age": 6, "gender": "female", "residentialAddress": "9 St Mary's Township, Chitungwiza", "latitude": -17.9931, "longitude": 31.0489 },
+    "facilityId": "00000000-0000-4000-8000-000000000001",
+    "dateOfDeath": "2026-08-25T09:15:00.000Z",
+    "preliminaryIcdCode": "A09",
+    "clinicalSummary": "Three days of acute watery diarrhoea and vomiting; presented severely dehydrated and lethargic. Rehydration started but the child developed hypovolaemic shock and died in the resuscitation bay. Suspected infectious gastroenteritis — stool cultures pending.",
+    "isMaternalPerinatal": false
+  },
+  {
+    "patient": { "nationalId": "63-3856210D14", "fullName": "Paidamoyo Mawere", "age": 41, "gender": "male", "residentialAddress": "Stall 221, Mbare Musika, Harare", "latitude": -17.8501, "longitude": 31.0465 },
+    "facilityId": "00000000-0000-4000-8000-000000000002",
+    "dateOfDeath": "2026-09-24T16:40:00.000Z",
+    "preliminaryIcdCode": "A00",
+    "clinicalSummary": "Market vendor with sudden-onset profuse watery diarrhoea, muscle cramps and prostration. Brought in with profound dehydration and weak pulse; died despite IV fluids and antibiotics. Post-mortem rapid test positive for Vibrio cholerae.",
+    "isMaternalPerinatal": false
+  },
+  {
+    "patient": { "nationalId": "63-5901842E67", "fullName": "Kudzai Chirume", "age": 52, "gender": "female", "residentialAddress": "House 18, Brundish, Chinhoyi", "latitude": -17.3622, "longitude": 30.1897 },
+    "facilityId": "00000000-0000-4000-8000-000000000006",
+    "dateOfDeath": "2026-10-08T03:25:00.000Z",
+    "preliminaryIcdCode": "A01",
+    "clinicalSummary": "Two weeks of stepwise fever, headache and abdominal pain treated at home. Admitted with peritonitis from a suspected ileal perforation; arrested during emergency laparotomy. Blood culture sent — typhoid strongly suspected clinically.",
+    "isMaternalPerinatal": false
+  },
+  {
+    "patient": { "nationalId": "63-4467290F22", "fullName": "Simba Dube", "age": 61, "gender": "male", "residentialAddress": "402 Avondale West, Harare", "latitude": -17.7902, "longitude": 31.0234 },
+    "facilityId": "00000000-0000-4000-8000-000000000002",
+    "dateOfDeath": "2026-08-27T21:05:00.000Z",
+    "preliminaryIcdCode": "I21",
+    "clinicalSummary": "Severe chest pain for 6 hours with sweating and breathlessness. ECG showed inferior STEMI; developed ventricular fibrillation in the casualty department and could not be resuscitated. History of hypertension and smoking.",
+    "isMaternalPerinatal": false
+  },
+  {
+    "patient": { "nationalId": "63-2283417G93", "fullName": "Rudo Zhou", "age": 71, "gender": "female", "residentialAddress": "77 Nketa 9, Bulawayo", "latitude": -20.1902, "longitude": 28.5121 },
+    "facilityId": "00000000-0000-4000-8000-000000000003",
+    "dateOfDeath": "2026-09-15T11:30:00.000Z",
+    "preliminaryIcdCode": "I21",
+    "clinicalSummary": "Elderly diabetic admitted with acute coronary syndrome complicated by pulmonary oedema. Deteriorated overnight despite diuresis and antiplatelets; cardiac arrest at 11:30, resuscitation unsuccessful.",
+    "isMaternalPerinatal": false
+  },
+  {
+    "patient": { "nationalId": "63-6710954H08", "fullName": "Tinashe Gumbo", "age": 58, "gender": "male", "residentialAddress": "31 Nehosho, Gweru", "latitude": -19.4388, "longitude": 29.8412 },
+    "facilityId": "00000000-0000-4000-8000-000000000005",
+    "dateOfDeath": "2026-10-10T07:50:00.000Z",
+    "preliminaryIcdCode": "I21",
+    "clinicalSummary": "Brought in dead after collapsing at work following sudden chest pain. No signs of trauma; known ischaemic heart disease. Certified dead on arrival — acute myocardial infarction recorded as probable cause.",
+    "isMaternalPerinatal": false
+  },
+  {
+    "patient": { "nationalId": "63-8137602J31", "fullName": "Tatenda Marowa", "age": 33, "gender": "male", "residentialAddress": "5 Sakubva, Mutare", "latitude": -18.9944, "longitude": 32.6340 },
+    "facilityId": "00000000-0000-4000-8000-000000000004",
+    "dateOfDeath": "2026-08-25T13:10:00.000Z",
+    "preliminaryIcdCode": "B54",
+    "clinicalSummary": "High fever and confusion for 5 days, self-medicated at home. RDT positive; admitted with jaundice and oliguria consistent with severe malaria. Died of multi-organ failure on day 2 despite artesunate and supportive care.",
+    "isMaternalPerinatal": false
+  },
+  {
+    "patient": { "nationalId": "63-1954830K76", "fullName": "Nyasha Moyo", "age": 5, "gender": "female", "residentialAddress": "44 Hobhouse, Mutare", "latitude": -18.9611, "longitude": 32.6489 },
+    "facilityId": "00000000-0000-4000-8000-000000000004",
+    "dateOfDeath": "2026-09-09T04:20:00.000Z",
+    "preliminaryIcdCode": "B50",
+    "clinicalSummary": "Febrile convulsions and unresponsiveness overnight. Arrived comatose (GCS 6); falciparum parasitaemia confirmed on smear. Developed refractory seizures and died within 6 hours — cerebral malaria.",
+    "isMaternalPerinatal": false
+  },
+  {
+    "patient": { "nationalId": "63-5092164L50", "fullName": "Chipo Ndlovu", "age": 45, "gender": "female", "residentialAddress": "16 Chikanga Phase 2, Mutare", "latitude": -19.0017, "longitude": 32.6158 },
+    "facilityId": "00000000-0000-4000-8000-000000000004",
+    "dateOfDeath": "2026-10-14T18:35:00.000Z",
+    "preliminaryIcdCode": "B54",
+    "clinicalSummary": "A week of intermittent fever, vomiting and severe anaemia (Hb 5.1). Transfused and started on IV artesunate but developed acute respiratory distress; died on day 3 of admission. Severe malaria with complications.",
+    "isMaternalPerinatal": false
+  },
+  {
+    "patient": { "nationalId": "63-3471856M19", "fullName": "Munyaradzi Sibanda", "age": 80, "gender": "male", "residentialAddress": "12 Glen Norah A, Harare", "latitude": -17.8945, "longitude": 30.9722 },
+    "facilityId": "00000000-0000-4000-8000-000000000001",
+    "dateOfDeath": "2026-08-29T10:00:00.000Z",
+    "preliminaryIcdCode": "J18",
+    "clinicalSummary": "Admitted with lobar pneumonia and septic shock; COPD on home oxygen. Failed weaning trials and deteriorated over a week despite IV antibiotics and non-invasive ventilation. Died of respiratory failure.",
+    "isMaternalPerinatal": false
+  },
+  {
+    "patient": { "nationalId": "63-7240961N84", "fullName": "Rutendo Chikafu", "age": 3, "gender": "female", "residentialAddress": "88 Luveve, Bulawayo", "latitude": -20.1288, "longitude": 28.5601 },
+    "facilityId": "00000000-0000-4000-8000-000000000003",
+    "dateOfDeath": "2026-09-18T15:45:00.000Z",
+    "preliminaryIcdCode": "J18",
+    "clinicalSummary": "Severe pneumonia with chest in-drawing and hypoxia on arrival; malnourished. Commenced on oxygen and IV antibiotics but progressed to respiratory failure overnight. Died on day 2 of admission.",
+    "isMaternalPerinatal": false
+  },
+  {
+    "patient": { "nationalId": "63-4618307P45", "fullName": "Farai Mawere", "age": 66, "gender": "female", "residentialAddress": "2 Ascot, Gweru", "latitude": -19.4701, "longitude": 29.7931 },
+    "facilityId": "00000000-0000-4000-8000-000000000005",
+    "dateOfDeath": "2026-10-20T08:15:00.000Z",
+    "preliminaryIcdCode": "J18",
+    "clinicalSummary": "Bilateral bronchopneumonia on chest X-ray with confusion and dehydration; COPD and heart failure comorbid. Treated for 6 days then arrested during a hypoxic episode — certified cause: pneumonia.",
+    "isMaternalPerinatal": false
+  },
+  {
+    "patient": { "nationalId": "63-6385120Q62", "fullName": "Tawanda Zvarevashe", "age": 73, "gender": "male", "residentialAddress": "56 Waterfalls, Harare", "latitude": -17.9123, "longitude": 31.0445 },
+    "facilityId": "00000000-0000-4000-8000-000000000002",
+    "dateOfDeath": "2026-09-01T22:30:00.000Z",
+    "preliminaryIcdCode": "U07.1",
+    "clinicalSummary": "Tested SARS-CoV-2 positive on admission with bilateral COVID pneumonia; diabetic and hypertensive. Progressed to ARDS despite dexamethasone and oxygen therapy; died on day 9 of illness.",
+    "isMaternalPerinatal": false
+  },
+  {
+    "patient": { "nationalId": "63-8062459R27", "fullName": "Chido Dube", "age": 68, "gender": "female", "residentialAddress": "19 Kuwadzana 3, Harare", "latitude": -17.9267, "longitude": 30.9513 },
+    "facilityId": "00000000-0000-4000-8000-000000000001",
+    "dateOfDeath": "2026-09-27T05:40:00.000Z",
+    "preliminaryIcdCode": "U07.1",
+    "clinicalSummary": "Respiratory distress and SpO2 78% on air; PCR confirmed COVID-19. Developed a secondary bacterial infection and sepsis on the ward. Died on day 6 of admission.",
+    "isMaternalPerinatal": false
+  },
+  {
+    "patient": { "nationalId": "63-1530948S96", "fullName": "Kudzai Mukono", "age": 81, "gender": "male", "residentialAddress": "3 Chikanga Phase 1, Mutare", "latitude": -18.9975, "longitude": 32.6204 },
+    "facilityId": "00000000-0000-4000-8000-000000000004",
+    "dateOfDeath": "2026-10-16T14:05:00.000Z",
+    "preliminaryIcdCode": "U07.1",
+    "clinicalSummary": "Frail nursing-home resident referred with COVID-19 pneumonia and dehydration. Comfort care instituted per family wishes; died peacefully on day 4. Cause certified as COVID-19 with frailty.",
+    "isMaternalPerinatal": false
+  },
+  {
+    "patient": { "nationalId": "63-2975634T11", "fullName": "Rudo Chirume", "age": 24, "gender": "female", "residentialAddress": "63 Honde Valley Rd, Mutare", "latitude": -18.9833, "longitude": 32.6510 },
+    "facilityId": "00000000-0000-4000-8000-000000000004",
+    "dateOfDeath": "2026-09-12T01:50:00.000Z",
+    "preliminaryIcdCode": "O95",
+    "clinicalSummary": "Admitted at 34 weeks with antepartum haemorrhage from placenta praevia; shocked on arrival. Emergency caesarean performed but mother arrested post-operatively from ongoing bleeding and DIC. Baby in NICU. MPDSR review initiated.",
+    "isMaternalPerinatal": true
+  },
+  {
+    "patient": { "nationalId": "63-5608917V38", "fullName": "Nyasha Gumbo", "age": 31, "gender": "female", "residentialAddress": "11 Mkoba 1, Gweru", "latitude": -19.4520, "longitude": 29.8100 },
+    "facilityId": "00000000-0000-4000-8000-000000000005",
+    "dateOfDeath": "2026-10-22T20:25:00.000Z",
+    "preliminaryIcdCode": "O95",
+    "clinicalSummary": "Admitted with severe pre-eclampsia at 37 weeks; developed eclamptic seizures in labour and progressed to HELLP syndrome. Died from intracerebral haemorrhage despite magnesium sulphate and caesarean delivery. MPDSR review initiated.",
+    "isMaternalPerinatal": true
+  },
+  {
+    "patient": { "nationalId": null, "fullName": "Baby of T. Zhou", "age": 0, "gender": "female", "residentialAddress": "77 Nketa 9, Bulawayo", "latitude": -20.1905, "longitude": 28.5126 },
+    "facilityId": "00000000-0000-4000-8000-000000000003",
+    "dateOfDeath": "2026-09-21T09:00:00.000Z",
+    "preliminaryIcdCode": "P95",
+    "clinicalSummary": "Stillborn at 38 weeks following reduced fetal movements for two days; mother a booked primigravida, delivery uncomplicated otherwise. Fresh stillbirth, no congenital abnormalities noted. Perinatal death review initiated.",
+    "isMaternalPerinatal": true
+  },
+  {
+    "patient": { "nationalId": "63-4793265W73", "fullName": "Tapiwa Marowa", "age": 49, "gender": "male", "residentialAddress": "34 Gadzema Township, Chinhoyi", "latitude": -17.3501, "longitude": 30.2201 },
+    "facilityId": "00000000-0000-4000-8000-000000000006",
+    "dateOfDeath": "2026-10-05T12:40:00.000Z",
+    "preliminaryIcdCode": "R99",
+    "clinicalSummary": "Found unresponsive at home by neighbours; certified dead on arrival. No significant past medical history and no external injuries. Sudden unexplained death — post-mortem examination requested to establish cause.",
+    "isMaternalPerinatal": false
+  },
+  {
+    "patient": { "nationalId": "63-8347092X58", "fullName": "Simba Moyo", "age": 38, "gender": "male", "residentialAddress": "27 Pumula South, Bulawayo", "latitude": -20.1967, "longitude": 28.5478 },
+    "facilityId": "00000000-0000-4000-8000-000000000003",
+    "dateOfDeath": "2026-10-26T23:15:00.000Z",
+    "preliminaryIcdCode": "X59",
+    "clinicalSummary": "Brought in by police after being found collapsed roadside with head injuries of undetermined mechanism — pedestrian versus vehicle suspected. Declared dead on arrival; case referred for forensic post-mortem.",
+    "isMaternalPerinatal": false
+  }
+]

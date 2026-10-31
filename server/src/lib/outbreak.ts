@@ -1,5 +1,5 @@
 import { config } from "../config.js"
-import { newId, query } from "../db.js"
+import { newId, query, withAdvisoryLock } from "../db.js"
 import { callPython } from "./analyticsClient.js"
 import { notifyUser } from "../routes/notifications-realtime.js"
 import { emailConfigured, sendEmail } from "./email.js"
@@ -13,6 +13,15 @@ import { emailConfigured, sendEmail } from "./email.js"
  * detecting outbreaks even when analytics/ is offline (Ch 5.3 resilience).
  */
 export async function detectOutbreaks(windowHours = config.outbreakWindowHours, notify = true) {
+  // Serialize the whole scan: every pass dedupes on "does an active alert
+  // exist?" then inserts — two overlapping scans would both pass the check
+  // and double-insert (seen: duplicate Mutare early-warning rows). The
+  // transaction-scoped advisory lock makes overlapping callers no-op.
+  const outcome = await withAdvisoryLock("outbreak-detection", 0, () => detectOutbreaksInner(windowHours, notify))
+  return outcome.acquired ? (outcome.value ?? []) : []
+}
+
+async function detectOutbreaksInner(windowHours: number, notify: boolean) {
   // Retire stale alerts first: an 'active' row suppresses re-alerting for its
   // district+category forever, so without expiry a second wave would be
   // silently swallowed. MPDSR alerts are left for human review.
@@ -71,7 +80,9 @@ export async function detectOutbreaks(windowHours = config.outbreakWindowHours, 
     if (existing.length) continue
 
     const alertId = newId("alt")
-    const riskScore = Math.min(100, 40 + c.case_count * 4 + (c.notifiable ? 15 : 0))
+    // Crossing the outbreak threshold is the red tier by definition — floor
+    // at 75 so the alert renders critical even without the notifiable bump.
+    const riskScore = Math.min(100, Math.max(75, 40 + c.case_count * 4 + (c.notifiable ? 15 : 0)))
     await query(
       `INSERT INTO outbreak_alerts
        (alert_id, disease_category, district, cluster_data, case_count, risk_score, alert_type, dispatched_channels)
@@ -93,6 +104,13 @@ export async function detectOutbreaks(windowHours = config.outbreakWindowHours, 
         // Outbreak alerts are pushed via websocket/inbox and, when SMTP is configured, email.
         emailConfigured() ? "websocket,email,audit-log" : "websocket,audit-log",
       ],
+    )
+    // A confirmed outbreak supersedes the softer early warning raised for the
+    // same district+category — never leave two active alerts on one cluster.
+    await query(
+      `UPDATE outbreak_alerts SET status = 'resolved', resolved_at = NOW()
+       WHERE status = 'active' AND alert_type = 'early_warning' AND district = ? AND disease_category = ?`,
+      [c.district, c.category],
     )
     created.push({ alertId, district: c.district, category: c.category, caseCount: c.case_count, riskScore })
     if (notify) {
@@ -173,10 +191,12 @@ export async function detectOutbreaks(windowHours = config.outbreakWindowHours, 
   for (const [key, c] of combos) {
     if (covered.has(key)) continue
     const cusumHit = cusumFlags.get(key)
-    const ruleHit = c.notifiable && c.total >= config.earlyWarningMinCases
+    // Any district+category reaching the minimum is an amber early warning —
+    // notifiable status only labels how it was caught, it isn't a gate.
+    const ruleHit = c.total >= config.earlyWarningMinCases
     if (!ruleHit && cusumHit === undefined) continue
 
-    const detection = ruleHit ? "notifiable-minimum" : "cusum"
+    const detection = ruleHit ? (c.notifiable ? "notifiable-minimum" : "minimum-cases") : "cusum"
     const alertId = newId("alt")
     await query(
       `INSERT INTO outbreak_alerts

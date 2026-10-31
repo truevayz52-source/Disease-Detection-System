@@ -1,4 +1,5 @@
 import useSWR from "swr"
+import { InfoTooltip } from "@/components/info-tooltip"
 import { Minus, TrendingDown, TrendingUp } from "lucide-react"
 import {
   CartesianGrid,
@@ -34,9 +35,9 @@ interface Predictions {
   minCases: number
   casesRecorded: number
   observed: { totalDeaths: number; coveragePeriods: number; perPeriodRate: number }
-  overall: { series: Point[]; forecast: ForecastPoint[]; directionPct: number; forecastMethod: "regression" | "rate-baseline" | null; summary: string[] }
+  overall: { series: Point[]; forecast: ForecastPoint[]; directionPct: number; forecastMethod: "seasonal" | "regression" | "rate-baseline" | null; summary: string[] }
   byCategory: CategoryProjection[]
-  byDistrict: { district: string; projected: number; sharePct: number }[]
+  byDistrict: { district: string; projected: number; sharePct: number; forecast?: { predicted: number }[] }[]
   topSummary: string[]
   banner: { state: "stable" | "watch" | "alert"; headline: string; detail: string }
   activeAlertCount: number
@@ -108,6 +109,13 @@ function DataReadiness({ have, need, unit }: { have: number; need: number; unit:
       </p>
     </div>
   )
+}
+
+/** Velocity of a per-district forecast: compare first vs last predicted point. */
+function trajectory(forecast?: { predicted: number }[]): CategoryProjection["trend"] {
+  if (!forecast || forecast.length < 2) return "insufficient_data"
+  const d = forecast[forecast.length - 1].predicted - forecast[0].predicted
+  return d > 0.25 ? "rising" : d < -0.25 ? "falling" : "stable"
 }
 
 function TrendChip({ trend }: { trend: CategoryProjection["trend"] }) {
@@ -214,8 +222,19 @@ export default function PredictionsPage() {
         {/* Overall mortality projection — graph, then its summary underneath */}
         <Card className="shadow-lg">
           <CardHeader>
-            <CardTitle className="text-sm">{t("Mortality projection")}</CardTitle>
+            <CardTitle className="text-sm flex items-center gap-1.5">{t("Mortality projection")}<InfoTooltip text={t("Regression model fit on reported deaths — the dashed line is the model's forward projection.")} /></CardTitle>
             <CardDescription>{t("Solid line = deaths actually reported · Dashed line = forecast")}</CardDescription>
+            {/* Objective 1 — forecast-confidence banner: states that forward
+                modeling is running, which model, and over how much history */}
+            {data?.overall.forecastMethod && (
+              <p className="flex flex-wrap items-center gap-1.5 pt-1.5">
+                <Badge variant="secondary" className="text-[10px] font-semibold">{t("Predictive modeling active")}</Badge>
+                <span className="text-xs text-muted-foreground">
+                  {data.overall.forecastMethod === "rate-baseline" ? t("Rate-baseline estimate") : data.overall.forecastMethod === "seasonal" ? t("Seasonal model") : t("Regression fit")}
+                  {" · "}{data.observed.coveragePeriods} {t("reporting periods of history")} · {t("horizon:")} {data.metrics.projectedPeriod}
+                </span>
+              </p>
+            )}
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="h-72">
@@ -280,6 +299,7 @@ export default function PredictionsPage() {
                   <TableHead>{t("District")}</TableHead>
                   <TableHead className="text-right">{t("Projected deaths")}</TableHead>
                   <TableHead className="text-right">{t("Share")}</TableHead>
+                  <TableHead className="text-right">{t("Trajectory")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -288,10 +308,12 @@ export default function PredictionsPage() {
                     <TableCell className="font-medium">{d.district}</TableCell>
                     <TableCell className="text-right tabular-nums">{d.projected}</TableCell>
                     <TableCell className="text-right tabular-nums">{d.sharePct}%</TableCell>
+                    {/* Objective 1 — trend velocity indicator per district */}
+                    <TableCell className="text-right"><TrendChip trend={trajectory(d.forecast)} /></TableCell>
                   </TableRow>
                 ))}
                 {data && !data.byDistrict.length && (
-                  <TableRow><TableCell colSpan={3} className="text-center text-muted-foreground">{t("No data yet")}</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground">{t("No data yet")}</TableCell></TableRow>
                 )}
               </TableBody>
             </Table>

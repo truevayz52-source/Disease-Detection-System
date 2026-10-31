@@ -12,6 +12,8 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { api } from "@/lib/api"
+import { Dialog, DialogContent, DialogFooter } from "@/components/ui/dialog"
+import { IntelligenceSummary, type CaseInsightsResponse } from "@/components/intelligence-summary"
 import { useAuth } from "@/lib/auth"
 import { clearDraft, enqueue, loadDraft, saveDraft } from "@/lib/offline-queue"
 import type { Facility, IcdCode } from "@/lib/types"
@@ -191,6 +193,7 @@ export default function NotificationNewPage() {const{t}=usePreferences();
   })
   const [icdDesc, setIcdDesc] = useState("")
   const [submitting, setSubmitting] = useState(false)
+  const [insightView, setInsightView] = useState<{ id: string; data: CaseInsightsResponse | null } | null>(null)
   const [attemptedSteps, setAttemptedSteps] = useState<Set<number>>(new Set())
   const { data: facilities } = useSWR<{ items: Facility[] }>("/facilities", (u: string) => api(u))
 
@@ -299,7 +302,12 @@ export default function NotificationNewPage() {const{t}=usePreferences();
       if (res.mpdsrAlertId) toast.warning(t("MPDSR alert generated for this maternal/perinatal death."))
       else if (res.alertsCreated.length) toast.warning(`${res.alertsCreated.length} outbreak alert(s) triggered.`)
       else toast.success(t("Death notification recorded."))
-      navigate(`/notifications/${res.notificationId}`)
+      // Self-explaining: pull the per-case interpretation so the officer
+      // sees the System Intelligence Summary before landing on the record.
+      let ins: CaseInsightsResponse | null = null
+      try { ins = await api<CaseInsightsResponse>(`/notifications/${res.notificationId}/insights`) } catch { /* summary is optional */ }
+      if (ins) setInsightView({ id: res.notificationId, data: ins })
+      else navigate(`/notifications/${res.notificationId}`)
     } catch (err) {
       // TC-05: on network failure queue the record locally and tell the officer.
       if (!navigator.onLine || (err instanceof TypeError)) {
@@ -529,6 +537,16 @@ export default function NotificationNewPage() {const{t}=usePreferences();
           )}
         </div>
       </div>
+      {/* Post-submit "system explains itself" dialog — closing it navigates
+          to the case record, where the same summary lives permanently. */}
+      <Dialog open={!!insightView} onOpenChange={(o) => { if (!o && insightView) navigate(`/notifications/${insightView.id}`) }}>
+        <DialogContent className="max-w-lg">
+          <IntelligenceSummary data={insightView?.data ?? undefined} loading={!insightView?.data} />
+          <DialogFooter>
+            <Button onClick={() => insightView && navigate(`/notifications/${insightView.id}`)}>{t("View case")}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   )
 }

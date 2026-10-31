@@ -74,14 +74,14 @@ export default function AlertsPage() {const{t}=usePreferences();
   const statCards = [
     {
       label: t("Active alerts"),
-      value: stats?.active ?? 0,
+      value: stats?.active,
       icon: Siren,
       color: "blue" as const,
-      sub: `${stats?.resolved ?? 0} ${t("resolved")} · ${stats?.total ?? 0} ${t("total")}`,
+      sub: stats ? `${stats.resolved} ${t("resolved")} · ${stats.total} ${t("total")}` : undefined,
     },
     {
       label: t("Critical (risk ≥75)"),
-      value: stats?.critical ?? 0,
+      value: stats?.critical,
       icon: AlertTriangle,
       color: "red" as const,
       sub: t("active now"),
@@ -89,14 +89,14 @@ export default function AlertsPage() {const{t}=usePreferences();
     },
     {
       label: t("High risk (50–74)"),
-      value: stats?.highRisk ?? 0,
+      value: stats?.highRisk,
       icon: Activity,
       color: "amber" as const,
       sub: t("active now"),
     },
     {
       label: t("Cases in active alerts"),
-      value: stats?.activeCases ?? 0,
+      value: stats?.activeCases,
       icon: Users,
       color: "emerald" as const,
       sub: t("across all districts"),

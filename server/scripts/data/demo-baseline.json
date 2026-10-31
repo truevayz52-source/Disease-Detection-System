@@ -1,0 +1,50 @@
+[
+  {
+    "patient": { "nationalId": "63-4827115K42", "fullName": "Tapiwa Chikafu", "age": 34, "gender": "male", "residentialAddress": "47 Mbare Flats, Mbare, Harare", "latitude": -17.8392, "longitude": 31.0412 },
+    "facilityId": "00000000-0000-4000-8000-000000000001",
+    "dateOfDeath": "2026-10-27T14:20:00.000Z",
+    "preliminaryIcdCode": "A00",
+    "clinicalSummary": "Brought in with profuse rice-water diarrhoea and vomiting for 2 days after attending a funeral gathering in Budiriro. Severe dehydration, BP 80/50 on arrival. Started on aggressive IV rehydration but arrested 3 hours after admission despite resuscitation. Stool sample sent for cholera confirmation.",
+    "isMaternalPerinatal": false
+  },
+  {
+    "patient": { "nationalId": "63-3856210D14", "fullName": "Paidamoyo Mawere", "age": 41, "gender": "male", "residentialAddress": "Stall 221, Mbare Musika, Harare", "latitude": -17.8501, "longitude": 31.0465 },
+    "facilityId": "00000000-0000-4000-8000-000000000002",
+    "dateOfDeath": "2026-10-29T16:40:00.000Z",
+    "preliminaryIcdCode": "A00",
+    "clinicalSummary": "Market vendor with sudden-onset profuse watery diarrhoea, muscle cramps and prostration. Brought in with profound dehydration and weak pulse; died despite IV fluids and antibiotics. Post-mortem rapid test positive for Vibrio cholerae.",
+    "isMaternalPerinatal": false
+  },
+  {
+    "patient": { "nationalId": "63-6732841T09", "fullName": "Nyasha Sibanda", "age": 29, "gender": "female", "residentialAddress": "Lot 14 Mzilikazi Township, Bulawayo", "latitude": -20.1538, "longitude": 28.5741 },
+    "facilityId": "00000000-0000-4000-8000-000000000003",
+    "dateOfDeath": "2026-10-26T02:30:00.000Z",
+    "preliminaryIcdCode": "O95",
+    "clinicalSummary": "Referred in extremis after a prolonged home delivery attended by an untrained attendant. Arrived in hypovolaemic shock from postpartum haemorrhage with a retained placenta. Transfused 4 units and taken to theatre but arrested intra-operatively. Baby survived. Referred to MPDSR committee.",
+    "isMaternalPerinatal": true
+  },
+  {
+    "patient": { "nationalId": "63-5190287M75", "fullName": "Rutendo Marowa", "age": 27, "gender": "female", "residentialAddress": "12 Dangamvura Township, Mutare", "latitude": -18.9756, "longitude": 32.6781 },
+    "facilityId": "00000000-0000-4000-8000-000000000004",
+    "dateOfDeath": "2026-10-24T06:45:00.000Z",
+    "preliminaryIcdCode": "B50",
+    "clinicalSummary": "Presented unconscious with a 4-day history of fever and rigors following recent travel to a malaria-endemic lowveld area near Chipinge. RDT positive for P. falciparum, parasitaemia high. Developed seizures and deteriorated despite IV artesunate — cerebral malaria. Pronounced dead at 06:45.",
+    "isMaternalPerinatal": false
+  },
+  {
+    "patient": { "nationalId": "63-2041783Q18", "fullName": "Munyaradzi Zvarevashe", "age": 68, "gender": "male", "residentialAddress": "8 Borrowdale Road, Borrowdale, Harare", "latitude": -17.7621, "longitude": 31.0774 },
+    "facilityId": "00000000-0000-4000-8000-000000000005",
+    "dateOfDeath": "2026-10-20T19:10:00.000Z",
+    "preliminaryIcdCode": "I21",
+    "clinicalSummary": "Known hypertensive and type-2 diabetic. Collapsed at home with crushing central chest pain radiating to the left arm. Cardiac arrest on arrival in casualty; resuscitated for 40 minutes without return of spontaneous circulation. ECG changes consistent with acute anterior STEMI.",
+    "isMaternalPerinatal": false
+  },
+  {
+    "patient": { "nationalId": "63-1387290B55", "fullName": "Farai Gumbo", "age": 74, "gender": "male", "residentialAddress": "34 Gadzema Township, Chinhoyi", "latitude": -17.3501, "longitude": 30.2201 },
+    "facilityId": "00000000-0000-4000-8000-000000000006",
+    "dateOfDeath": "2026-10-15T11:55:00.000Z",
+    "preliminaryIcdCode": "J18",
+    "clinicalSummary": "Admitted 5 days ago with a left-sided hemiplegic stroke and dysphagia. Developed fever, productive cough and hypoxia on day 3 — aspiration pneumonia on chest X-ray. Failed to respond to broad-spectrum antibiotics and oxygen. Died of respiratory failure.",
+    "isMaternalPerinatal": false
+  }
+]

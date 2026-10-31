@@ -1,5 +1,6 @@
 import { query } from "../db.js"
 import { httpError } from "./notification-service.js"
+import { notifyUser } from "../routes/notifications-realtime.js"
 
 /** All legal statuses for a death notification. */
 export const CASE_STATUSES = [
@@ -66,4 +67,42 @@ export function validateTransition(from: CaseStatus, to: CaseStatus): void {
 /** SLA hours for a notification, based on clinical flags. */
 export function reviewSlaHours(isMaternalPerinatal: boolean): number {
   return isMaternalPerinatal ? 48 : 72
+}
+
+/**
+ * Auto-assign unassigned pending_review cases to the least-loaded active
+ * pathologist (round-robin over the open-case ranking) and notify the
+ * assignee — cases never just sit in the queue. Returns rows assigned.
+ */
+export async function autoAssignPendingReviews(limit = 20): Promise<number> {
+  const reviewers = await query<any[]>(
+    `SELECT u.user_id, COUNT(dn.notification_id) AS open_cases
+     FROM users u
+     LEFT JOIN death_notifications dn ON dn.assigned_to = u.user_id
+       AND dn.status IN ('pending_review','under_review')
+     WHERE u.status = 'active' AND u.role = 'pathologist'
+     GROUP BY u.user_id ORDER BY open_cases ASC, u.user_id`,
+  )
+  if (!reviewers.length) return 0
+  const pending = await query<any[]>(
+    `SELECT notification_id, is_maternal_perinatal FROM death_notifications
+     WHERE status = 'pending_review' AND assigned_to IS NULL
+     ORDER BY created_at ASC LIMIT ?`,
+    [limit],
+  )
+  let assigned = 0
+  for (const n of pending) {
+    const target = reviewers[assigned % reviewers.length].user_id
+    const due = new Date(Date.now() + reviewSlaHours(!!n.is_maternal_perinatal) * 3600 * 1000)
+    const updated = await query<any>(
+      `UPDATE death_notifications SET assigned_to = ?, review_due_at = ?
+       WHERE notification_id = ? AND assigned_to IS NULL AND status = 'pending_review'`,
+      [target, due, n.notification_id],
+    )
+    if (Number((updated as { affectedRows?: number })?.affectedRows ?? 1) > 0) {
+      assigned++
+      void notifyUser(target, "Case assigned", `Case ${n.notification_id} has been assigned to you.`, `/notifications/${n.notification_id}`, "assignment").catch(() => {})
+    }
+  }
+  return assigned
 }

@@ -8,8 +8,9 @@ import { events } from "../websocket/index.js"
 export const realtimeRouter = Router()
 realtimeRouter.use(requireAuth)
 export async function notifyUser(userId: string, title: string, message: string, actionUrl: string, type = "info") {
-  await query("INSERT INTO user_notifications (notification_id,user_id,notification_type,title,message,action_url) VALUES (?,?,?,?,?,?)", [newId("msg"),userId,type,title,message,actionUrl])
-  events.emit("inbox",userId)
+  const id = newId("msg")
+  await query("INSERT INTO user_notifications (notification_id,user_id,notification_type,title,message,action_url) VALUES (?,?,?,?,?,?)", [id,userId,type,title,message,actionUrl])
+  events.emit("inbox",userId,{ notification_id: id, notification_type: type, title, message, action_url: actionUrl })
 }
 realtimeRouter.get("/", async (req, res) => {
   const items = await query<any[]>("SELECT * FROM user_notifications WHERE user_id=? AND (expires_at IS NULL OR expires_at>NOW()) ORDER BY created_at DESC LIMIT 100", [req.user!.userId])

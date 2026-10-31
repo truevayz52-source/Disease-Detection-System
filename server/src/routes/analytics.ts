@@ -6,6 +6,7 @@ import { z } from "zod"
 import { detectOutbreaks } from "../lib/outbreak.js"
 import { callPython, pythonHealth } from "../lib/analyticsClient.js"
 import { writeAudit } from "../lib/audit.js"
+import { ttlCache } from "../lib/cache.js"
 import { createNotification } from "../lib/notification-service.js"
 import multer from "multer"
 import { serviceJson } from "../lib/integrations.js"
@@ -144,7 +145,7 @@ analyticsRouter.get("/dashboard", requireAuth, async (_req, res) => {
 })
 
 // Weekly mortality trend by category + naive least-squares forecast (Node fallback).
-analyticsRouter.get("/trends", requireAuth, requireRole(...ANALYST_ROLES, "executive"), async (req, res) => {
+analyticsRouter.get("/trends", requireAuth, requireRole(...ANALYST_ROLES, "executive"), ttlCache(60), async (req, res) => {
   const weeks = Math.min(52, Math.max(4, Number(req.query.weeks ?? 12)))
   const rows = await query<any[]>(
     `SELECT date_trunc('week', dn.date_of_death) AS yw,
@@ -190,7 +191,14 @@ analyticsRouter.get("/trends", requireAuth, requireRole(...ANALYST_ROLES, "execu
 })
 
 // Case points + facilities for the Leaflet surveillance map.
-analyticsRouter.get("/geo", requireAuth, requireRole(...ANALYST_ROLES), async (_req, res) => {
+// Shared caches for the map endpoints — geo/clusters payloads are identical
+// for every analyst, so a per-user cache wastes the ~4s cold query each
+// minute. The geo cache is also warmed at startup so the first map open is
+// a cache hit.
+let geoCache: { at: number; payload: unknown } | null = null
+const GEO_TTL_MS = 60_000
+
+async function buildGeoPayload() {
   const [facilities, cases] = await Promise.all([
     query<any[]>(
       "SELECT facility_id, facility_name, province, district, latitude, longitude, facility_type FROM facilities",
@@ -216,7 +224,24 @@ analyticsRouter.get("/geo", requireAuth, requireRole(...ANALYST_ROLES), async (_
     latitude: c.latitude ?? c.facility_lat,
     longitude: c.longitude ?? c.facility_lng,
   }))
-  res.json({ facilities, cases: points })
+  return { facilities, cases: points }
+}
+
+/** Called once at startup — fills the geo cache so the first map open is
+ *  a hit instead of a ~4s cold query. */
+export async function warmGeoCache() {
+  try {
+    geoCache = { at: Date.now(), payload: await buildGeoPayload() }
+  } catch (err) {
+    console.error("[warmup] geo cache failed:", (err as Error)?.message ?? err)
+  }
+}
+
+analyticsRouter.get("/geo", requireAuth, requireRole(...ANALYST_ROLES), async (_req, res) => {
+  if (geoCache && Date.now() - geoCache.at < GEO_TTL_MS) return res.json(geoCache.payload)
+  const payload = await buildGeoPayload()
+  geoCache = { at: Date.now(), payload }
+  res.json(payload)
 })
 
 // Run detection on demand (used by "detect now" button + tests).
@@ -239,7 +264,7 @@ analyticsRouter.post(
 
 // ML clustering — tries the FastAPI scikit-learn service, falls back to Node
 // district+category grouping so the page always returns data (Ch 5.3).
-analyticsRouter.get("/clusters", requireAuth, requireRole(...ANALYST_ROLES), async (_req, res) => {
+analyticsRouter.get("/clusters", requireAuth, requireRole(...ANALYST_ROLES), ttlCache(60), async (_req, res) => {
   const cases = await query<any[]>(
     `SELECT dn.notification_id AS id, ic.disease_category AS category,
             COALESCE(p.latitude, f.latitude) AS lat, COALESCE(p.longitude, f.longitude) AS lng,
@@ -259,7 +284,27 @@ analyticsRouter.get("/clusters", requireAuth, requireRole(...ANALYST_ROLES), asy
   type Cluster = { category: string; district?: string; province?: string; count: number; centroid_lat: number; centroid_lng: number; ids: string[]; source: string }
   const pyResult = await callPython<{ clusters: Omit<Cluster, "source">[] }>("/cluster", { points: cases, eps_km: 25 })
   if (pyResult) {
-    return res.json({ engine: "python-sklearn", clusters: pyResult.clusters.map((c) => ({ ...c, source: "python" })) })
+    // Older analytics builds don't echo district/province — derive each
+    // cluster's dominant location from its member notifications so the
+    // "Where" column is never blank.
+    const byId = new Map(cases.map((c) => [c.id, c]))
+    const dominant = (ids: string[], field: "district" | "province") => {
+      const tally = new Map<string, number>()
+      for (const id of ids) {
+        const v = byId.get(id)?.[field]
+        if (v) tally.set(v, (tally.get(v) ?? 0) + 1)
+      }
+      return [...tally.entries()].sort((a, b) => b[1] - a[1])[0]?.[0]
+    }
+    return res.json({
+      engine: "python-sklearn",
+      clusters: pyResult.clusters.map((c) => ({
+        ...c,
+        district: c.district ?? dominant(c.ids, "district"),
+        province: c.province ?? dominant(c.ids, "province"),
+        source: "python",
+      })),
+    })
   }
 
   // Node fallback: group by category+district, centroid = mean of points.

@@ -36,6 +36,21 @@ export default function SignInPage() {const{t}=usePreferences();
     }
   }
 
+  const objectives = [
+    {
+      title: t("Predict mortality trends"),
+      desc: t("Forecasts expected deaths from reported notifications, so planners see what's coming."),
+    },
+    {
+      title: t("Detect outbreaks early"),
+      desc: t("Five-layer statistical surveillance raises alerts before an outbreak takes hold."),
+    },
+    {
+      title: t("Identify cause-of-death patterns"),
+      desc: t("ICD-10 coded analytics reveal what is killing people, and where."),
+    },
+  ]
+
   const features = [
     {
       icon: Activity,
@@ -86,6 +101,22 @@ export default function SignInPage() {const{t}=usePreferences();
               <p className="mt-1 text-sm font-medium text-emerald-400">
                 {t("Ministry of Health and Child Care — Zimbabwe")}
               </p>
+            </div>
+
+            {/* System objectives — the platform states its purpose up front,
+                so the page explains itself before anyone signs in */}
+            <div className="w-full space-y-2">
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-emerald-400/90">
+                {t("System objectives")}
+              </p>
+              <ul className="space-y-1.5">
+                {objectives.map((o) => (
+                  <li key={o.title} className="text-xs leading-relaxed">
+                    <span className="font-semibold text-white">{o.title}</span>
+                    <span className="text-white/75"> — {o.desc}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
 
             {/* Single combined card with invisible format — only words and sleek indicators visible */}

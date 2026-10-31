@@ -15,7 +15,7 @@ const VARIANTS: Record<StatColor, { grad: string; shadow: string }> = {
   slate: { grad: "from-slate-500 to-slate-700", shadow: "shadow-slate-900/40" },
 }
 
-export function DeltaBadge({ value, invert = false }: { value: number | null; invert?: boolean }) {
+export function DeltaBadge({ value, invert = false, muted = false }: { value: number | null; invert?: boolean; muted?: boolean }) {
   if (value === null || value === undefined) return null
   const up = value >= 0
   const bad = invert ? !up : up
@@ -23,8 +23,10 @@ export function DeltaBadge({ value, invert = false }: { value: number | null; in
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1 rounded-full px-1.5 py-px text-[11px] font-semibold backdrop-blur-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.3)]",
-        bad ? "bg-black/25 text-white" : "bg-white/25 text-white",
+        "inline-flex items-center gap-1 rounded-full px-1.5 py-px text-[11px] font-semibold backdrop-blur-sm",
+        muted
+          ? "bg-muted text-muted-foreground ring-1 ring-border/50"
+          : cn("shadow-[inset_0_1px_0_rgba(255,255,255,0.3)]", bad ? "bg-black/25 text-white" : "bg-white/25 text-white"),
       )}
     >
       <Icon className="size-3" />
@@ -51,21 +53,28 @@ interface StatCardProps {
 }
 
 /**
- * Shared KPI/stat card: fully colored gradient with a 3D finish —
- * deep colored shadow, top gloss highlight, inner bevel, frosted icon tile,
- * and a hover lift. Used by the dashboard, pathology queue, alerts, etc.
+ * Shared KPI/stat card: muted neutral surface while the value is 0/empty,
+ * switching to the fully colored gradient with a 3D finish — deep colored
+ * shadow, top gloss highlight, inner bevel, frosted icon tile — only when
+ * there's a real count to show. Used by the dashboard, pathology queue,
+ * alerts, etc.
  */
 export function StatCard({ label, value, icon: Icon, color = "slate", sub, delta, invertDelta, pulse, compact }: StatCardProps) {
   const v = VARIANTS[color]
+  const lit = value !== undefined && value !== null && value !== 0 && value !== "0"
   return (
     <Card
       className={cn(
-        "relative rounded-xl border-0 bg-gradient-to-br text-white ring-0 shadow-lg transition-all duration-200",
-        "hover:-translate-y-1 hover:shadow-xl",
-        "before:absolute before:inset-x-0 before:top-0 before:h-1/2 before:rounded-t-xl before:bg-gradient-to-b before:from-white/25 before:to-transparent",
-        "after:pointer-events-none after:absolute after:inset-0 after:rounded-xl after:shadow-[inset_0_1px_0_rgba(255,255,255,0.35),inset_0_-2px_4px_rgba(0,0,0,0.25)]",
-        v.grad, v.shadow,
-        pulse && "animate-pulse",
+        "relative rounded-xl transition-all duration-200 hover:-translate-y-1 hover:shadow-xl",
+        lit
+          ? cn(
+              "border-0 bg-gradient-to-br text-white ring-0 shadow-lg",
+              "before:absolute before:inset-x-0 before:top-0 before:h-1/2 before:rounded-t-xl before:bg-gradient-to-b before:from-white/25 before:to-transparent",
+              "after:pointer-events-none after:absolute after:inset-0 after:rounded-xl after:shadow-[inset_0_1px_0_rgba(255,255,255,0.35),inset_0_-2px_4px_rgba(0,0,0,0.25)]",
+              v.grad, v.shadow,
+            )
+          : "bg-card text-foreground shadow-sm",
+        pulse && lit && "animate-siren",
       )}
     >
       <CardContent className={cn("relative", compact ? "p-3" : "p-4")}>
@@ -73,20 +82,25 @@ export function StatCard({ label, value, icon: Icon, color = "slate", sub, delta
           <div className="min-w-0 space-y-0.5">
             {compact ? (
               <>
-                <p className="text-2xl font-bold tabular-nums drop-shadow-sm">{value ?? "—"}</p>
-                <p className="text-xs font-medium text-white/85">{label}</p>
+                <p className={cn("text-2xl font-bold tabular-nums", lit && "drop-shadow-sm")}>{value ?? "—"}</p>
+                <p className={cn("text-xs font-medium", lit ? "text-white/85" : "text-muted-foreground")}>{label}</p>
               </>
             ) : (
               <>
-                <p className="text-xs font-semibold text-white/85 tracking-tight">{label}</p>
-                <p className="text-2xl font-bold tabular-nums drop-shadow-sm">{value ?? "—"}</p>
+                <p className={cn("text-xs font-semibold tracking-tight", lit ? "text-white/85" : "text-muted-foreground")}>{label}</p>
+                <p className={cn("text-2xl font-bold tabular-nums", lit && "drop-shadow-sm")}>{value ?? "—"}</p>
               </>
             )}
-            {sub && <p className="text-[10px] text-white/70">{sub}</p>}
-            {delta !== undefined && <div><DeltaBadge value={delta} invert={invertDelta} /></div>}
+            {sub && <p title={sub} className={cn("text-[10px] leading-snug", lit ? "text-white/70" : "text-muted-foreground/80")}>{sub}</p>}
+            {delta !== undefined && <div><DeltaBadge value={delta} invert={invertDelta} muted={!lit} /></div>}
           </div>
-          <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-white/25 backdrop-blur-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.4),0_2px_4px_rgba(0,0,0,0.2)]">
-            <Icon className="size-4 drop-shadow" />
+          <div className={cn(
+            "flex size-8 shrink-0 items-center justify-center rounded-lg",
+            lit
+              ? "bg-white/25 backdrop-blur-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.4),0_2px_4px_rgba(0,0,0,0.2)]"
+              : "bg-muted text-muted-foreground ring-1 ring-border/50",
+          )}>
+            <Icon className={cn("size-4", lit && "drop-shadow")} />
           </div>
         </div>
       </CardContent>

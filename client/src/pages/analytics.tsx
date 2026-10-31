@@ -1,10 +1,13 @@
 import { useMemo, useState } from "react"
 import useSWR from "swr"
+import { Link } from "react-router-dom"
 import { toast } from "sonner"
 import { Loader2, Radar } from "lucide-react"
 import {
   Area,
   AreaChart,
+  Bar,
+  BarChart,
   CartesianGrid,
   Legend,
   Line,
@@ -59,37 +62,57 @@ export default function AnalyticsPage() {const{t}=usePreferences();
     { refreshInterval: 8 * 60 * 1000 },
   )
   const { data: engine } = useSWR<{ python: boolean }>("/analytics/engine-status", (u: string) => api(u))
+  const { data: dash } = useSWR<{ byProvince: { province: string; count: number }[] }>("/analytics/dashboard", (u: string) => api(u))
   const [detecting, setDetecting] = useState(false)
 
   const categories = useMemo(
     () => [...new Set((trends?.rows ?? []).map((r) => r.category))].sort(),
     [trends],
   )
-  const chartData = useMemo(() => {
-    const byWeek = new Map<string, Record<string, number | string>>()
-    for (const r of trends?.rows ?? []) {
-      if (!byWeek.has(r.week_start)) byWeek.set(r.week_start, { week: r.week_start })
-      byWeek.get(r.week_start)![r.category] = Number(r.count)
-    }
-    return [...byWeek.values()].sort((a, b) => String(a.week).localeCompare(String(b.week)))
+  // Continuous Monday-start week axis covering the 12-week window,
+  // matching Postgres date_trunc('week'). Both charts zero-fill onto this
+  // axis — a category/week with deaths in only one bucket otherwise
+  // renders as a disconnected sliver or a gap.
+  const weekAxis = useMemo(() => {
+    const fmt = (d: Date) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
+    const monday = new Date()
+    monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7))
+    const weeks = Array.from({ length: 12 }, (_, i) => {
+      const d = new Date(monday)
+      d.setDate(d.getDate() - (11 - i) * 7)
+      return fmt(d)
+    })
+    for (const r of trends?.rows ?? []) if (!weeks.includes(r.week_start)) weeks.push(r.week_start)
+    for (const s of trends?.series ?? []) if (!weeks.includes(s.week)) weeks.push(s.week)
+    return weeks.sort()
   }, [trends])
 
-  const forecastData = useMemo(
-    () => [
-      ...(trends?.series ?? []).map((s) => ({ week: s.week, actual: s.count, predicted: null as number | null })),
-      ...(trends?.forecast ?? []).map((f) => ({ week: f.week, actual: null as number | null, predicted: f.predicted })),
-    ],
-    [trends],
-  )
+  const chartData = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const r of trends?.rows ?? []) counts.set(`${r.week_start}|${r.category}`, Number(r.count))
+    return weekAxis.map((week) => {
+      const row: Record<string, number | string> = { week }
+      for (const c of categories) row[c] = counts.get(`${week}|${c}`) ?? 0
+      return row
+    })
+  }, [trends, categories, weekAxis])
 
-  const provinceCounts = useMemo(() => {
-    const m = new Map<string, number>()
-    for (const c of clusters?.clusters ?? []) {
-      const prov = c.province ?? c.district
-      if (prov) m.set(prov, (m.get(prov) ?? 0) + c.count)
-    }
-    return [...m.entries()].map(([province, count]) => ({ province, count })).sort((a, b) => b.count - a.count)
-  }, [clusters])
+  const forecastData = useMemo(() => {
+    const actual = new Map((trends?.series ?? []).map((s) => [s.week, s.count]))
+    return [
+      ...weekAxis.map((week) => ({ week, actual: actual.get(week) ?? 0, predicted: null as number | null })),
+      ...(trends?.forecast ?? []).map((f) => ({ week: f.week, actual: null as number | null, predicted: f.predicted })),
+    ]
+  }, [trends, weekAxis])
+
+  // Deaths by province comes from the dashboard aggregation (all reported
+  // deaths in 90 days) — the clusters feed only yields rows when an outbreak
+  // cluster exists, which left this chart blank on a quiet dataset.
+  const provinceCounts = useMemo(
+    () => (dash?.byProvince ?? []).slice().sort((a, b) => b.count - a.count),
+    [dash],
+  )
 
   async function detectNow() {
     setDetecting(true)
@@ -178,6 +201,7 @@ export default function AnalyticsPage() {const{t}=usePreferences();
                     <TableHead>{t("Cause of death")}</TableHead>
                     <TableHead>{t("Where")}</TableHead>
                     <TableHead className="text-right">{t("Deaths")}</TableHead>
+                    <TableHead className="text-right">{t("Action")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -190,6 +214,14 @@ export default function AnalyticsPage() {const{t}=usePreferences();
                         <TableCell className="font-medium">{c.category}</TableCell>
                         <TableCell>{c.district ?? c.province ?? "—"}</TableCell>
                         <TableCell className="text-right tabular-nums">{c.count}</TableCell>
+                        <TableCell className="text-right">
+                          <Link
+                            to={`/notifications?district=${encodeURIComponent(c.district ?? c.province ?? "")}&category=${encodeURIComponent(c.category)}`}
+                            className="text-xs font-medium text-blue-600 hover:underline"
+                          >
+                            {t("Investigate")}
+                          </Link>
+                        </TableCell>
                       </TableRow>
                     ))}
                   {(clusters?.clusters ?? []).length === 0 && (
@@ -210,15 +242,22 @@ export default function AnalyticsPage() {const{t}=usePreferences();
               <CardDescription>{t("Which provinces the reported deaths are coming from")}</CardDescription>
             </CardHeader>
             <CardContent className="h-72">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={provinceCounts}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="province" tick={{ fontSize: 11 }} />
-                  <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
-                  <Tooltip />
-                  <Line type="monotone" dataKey="count" name={t("Deaths")} stroke="#2563eb" strokeWidth={2.5} dot={{ r: 4 }} style={{ filter: "drop-shadow(0 3px 4px rgba(37,99,235,0.35))" }} />
-                </LineChart>
-              </ResponsiveContainer>
+              {provinceCounts.length ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={provinceCounts} margin={{ top: 4, right: 8, left: -18, bottom: 0 }}>
+                    <DepthDefs id="prov" colors={["#2563eb"]} />
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="province" tick={{ fontSize: 10 }} interval={0} angle={-25} textAnchor="end" height={56} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 11 }} width={32} />
+                    <Tooltip />
+                    <Bar dataKey="count" name={t("Deaths")} fill={grad("prov", 0)} radius={[5, 5, 0, 0]} style={{ filter: shadow("prov") }} />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <p className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                  {t("No reported deaths to chart yet.")}
+                </p>
+              )}
             </CardContent>
           </Card>
         </div>

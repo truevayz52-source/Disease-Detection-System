@@ -1,4 +1,5 @@
 import { CommentThread } from "@/components/comment-thread"
+import { IntelligenceSummary, type CaseInsightsResponse } from "@/components/intelligence-summary"
 import { AiSummaryBlock } from "@/components/ai-block"
 import { useRef, useState } from "react"
 import { Link, useParams } from "react-router-dom"
@@ -27,6 +28,7 @@ export default function NotificationDetailPage() {const{t}=usePreferences();
   const { id } = useParams<{ id: string }>()
   const { user } = useAuth()
   const { data, mutate } = useSWR<Detail>(id ? `/notifications/${id}` : null, (u: string) => api(u))
+  const { data: insights } = useSWR<CaseInsightsResponse>(id ? `/notifications/${id}/insights` : null, (u: string) => api(u))
   const fileRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
 
@@ -57,7 +59,7 @@ export default function NotificationDetailPage() {const{t}=usePreferences();
         <div className="p-6 text-sm text-muted-foreground">{t("Loading…")}</div>
       ) : (
         <div className="grid gap-6 p-4 lg:grid-cols-3 lg:p-6">
-          <div className="space-y-6 lg:col-span-2"><CommentThread notificationId={id!} />
+          <div className="space-y-6 lg:col-span-2"><IntelligenceSummary data={insights} loading={!insights} /><CommentThread notificationId={id!} />
             <Card className="shadow-lg">
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle className="text-base">{n.patient_name}</CardTitle>

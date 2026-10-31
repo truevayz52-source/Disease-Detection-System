@@ -1,4 +1,5 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide InputDecoration, Text, TextSpan;
+import 'package:dds_mobile/l10n/localized_widgets.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
@@ -164,6 +165,7 @@ class _NotificationNewScreenState extends State<NotificationNewScreen> {
   Future<void> _submit() async {
     setState(() => _submitting = true);
     final user = context.read<AuthRepository>().user;
+    final mutations = context.read<MutationService>();
     // Coordinates come from the selected facility's stored GPS fix — officers
     // never type lat/lng (location = reporting facility).
     final facility = _facilities
@@ -191,12 +193,11 @@ class _NotificationNewScreenState extends State<NotificationNewScreen> {
       'isMaternalPerinatal': isMaternalPerinatal,
     };
     try {
-      final res = await context.read<DdsRepository>().createNotification(
-        payload,
-      );
+      final repo = context.read<DdsRepository>();
+      final res = await repo.createNotification(payload);
       // Best-effort back-link: this notification was created from a signal.
       if (linkedSignalId.isNotEmpty && mounted) {
-        await context.read<MutationService>().http(
+        await mutations.http(
           'PATCH',
           '/signals/$linkedSignalId/workflow',
           body: {'linkedNotificationId': res.notificationId},
@@ -219,13 +220,25 @@ class _NotificationNewScreenState extends State<NotificationNewScreen> {
           ),
         ),
       );
-      context.pushReplacement('/notifications/${res.notificationId}');
+      // Self-explaining: fetch the per-case intelligence summary and show it
+      // before landing on the record (the same panel lives on the detail
+      // screen). A failure still navigates normally.
+      Map<String, dynamic>? insights;
+      try {
+        insights = await repo.caseInsights(res.notificationId);
+      } catch (_) {}
+      if (!mounted) return;
+      if (insights == null) {
+        context.pushReplacement('/notifications/${res.notificationId}');
+      } else {
+        await _showInsights(insights, res.notificationId);
+      }
     } on ApiException catch (e) {
       if (e.status == 0) {
         // Offline — queue locally (TC-05 parity). The op lands in
         // offline_cases instantly, so the record is visible in the
         // notifications list straight away with a pending marker.
-        await context.read<MutationService>().notification(payload);
+        await mutations.notification(payload);
         await _drafts.clearDraft();
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -246,6 +259,59 @@ class _NotificationNewScreenState extends State<NotificationNewScreen> {
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
+  }
+
+  /// Post-submit "system explains itself" dialog — shows the server-written
+  /// interpretation per objective, then navigates to the case record.
+  Future<void> _showInsights(Map<String, dynamic> data, String id) async {
+    if (!mounted) return;
+    final items = (data['insights'] as List? ?? []);
+    return showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: Text(tr('System Intelligence Summary')),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (final i in items)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${i['label']}',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.black54,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${i['text']}',
+                        style: const TextStyle(fontSize: 13, height: 1.35),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              context.pushReplacement('/notifications/$id');
+            },
+            child: Text(tr('View case')),
+          ),
+        ],
+      ),
+    );
   }
 
   @override

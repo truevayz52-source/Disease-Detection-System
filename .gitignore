@@ -33,3 +33,7 @@ __pycache__/
 # deploy bundle + stale flutter build outputs (too large for git)
 dds-deploy.tar.gz
 mobile/build.old/
+
+# runtime logs / stray artifacts
+logs/
+nul

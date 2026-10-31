@@ -17,6 +17,8 @@ import { passwordResetRouter } from "./routes/password-reset.js"
 import { blockchainRouter } from "./routes/blockchain.js"
 import { runScheduledReports } from "./lib/scheduled-reports.js"
 import { detectOutbreaks } from "./lib/outbreak.js"
+import { autoAssignPendingReviews } from "./lib/case-workflow.js"
+import { warmGeoCache } from "./routes/analytics.js"
 import helmet from "helmet"
 import cors from "cors"
 import compression from "compression"
@@ -189,6 +191,9 @@ const OUTBREAK_INTERVAL_MS = 8 * 60 * 1000
 const runOutbreakDetection = () =>
   detectOutbreaks()
     .then((created) => {
+      void autoAssignPendingReviews().then((n) => {
+        if (n) console.log(`[workflow] auto-assigned ${n} pending review(s)`)
+      }).catch(() => {})
       if (created.length) {
         console.log(`[outbreak] scheduled detection created ${created.length} alert(s)`)
       }
@@ -201,7 +206,8 @@ runOutbreakDetection()
 server.listen(config.port, () => {
   console.log(`[Disease Detection System] API listening on http://127.0.0.1:${config.port}`)
   startDiscoveryBeacon(config.port)
-  // Warm the dashboard cache so the first user request is sub-second.
+  // Warm the dashboard + geo caches so first requests are sub-second.
+  void warmGeoCache().then(() => console.log("[warmup] geo cache ready"))
   setTimeout(() => {
     void getDashboardData()
       .then(() => console.log("[warmup] dashboard cache ready"))

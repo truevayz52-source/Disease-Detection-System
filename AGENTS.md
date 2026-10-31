@@ -241,6 +241,25 @@ Scaffold/drawer crashes with "No MaterialLocalizations found" on language
 switch. Regression test: `test/locale_switch_test.dart` pumps all active
 locales.
 
+Web client: `useLocalizedDom` (`client/src/lib/dom-localize.ts`, mounted in
+`PreferencesProvider`) translates literal text nodes and placeholder/title/
+aria-label attributes that never went through `t()` — MutationObserver +
+TreeWalker over `document.body`, originals kept (WeakMap + `data-i18n-*`) so
+English restores on switch-back. Skips SCRIPT/STYLE/CODE/PRE/TEXTAREA and any
+`[data-i18n-skip]` subtree. Untranslated literals stay English — extend
+coverage with `pnpm i18n:scan`/`i18n:build` (see `i18n/README.md`).
+
+Mobile: `lib/l10n/localized_widgets.dart` is the drop-in shadow layer —
+`Text`/`Text.rich`/`TextSpan`/`InputDecoration` subclasses whose constructors
+translate their string args through `tr()` (incl. label/hint/helper/error/
+prefix/suffix/counter text and nested spans). Screens opt in with
+`import 'package:flutter/material.dart' hide InputDecoration, Text, TextSpan;`
++ the `dds_mobile/l10n/localized_widgets.dart` import — all current screens
+already do. The constructors are non-const, so `const Text(`/`const
+InputDecoration(` won't compile — drop the `const`. `InputDecoration.collapsed`
+isn't shadowed; use the default constructor. Values with no dictionary entry
+pass through untouched (data, names, IDs stay verbatim).
+
 ## Offline layer (mobile)
 
 - `data/secure_store.dart` — flutter_secure_storage (Keystore/Keychain) for

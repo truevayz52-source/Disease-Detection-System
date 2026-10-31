@@ -1,5 +1,6 @@
 import 'package:fl_chart/fl_chart.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide InputDecoration, Text, TextSpan;
+import 'package:dds_mobile/l10n/localized_widgets.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
@@ -86,6 +87,88 @@ class _DashboardScreenState extends State<DashboardScreen> {
               child: ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
+                  // System mission — the three objectives, collapsible, so the
+                  // app explains itself the moment it opens (web parity).
+                  Card(
+                    color: const Color(0xFFEFF6FF),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: const BorderSide(color: Color(0xFFBFDBFE)),
+                    ),
+                    child: Theme(
+                      data: Theme.of(
+                        context,
+                      ).copyWith(dividerColor: Colors.transparent),
+                      child: ExpansionTile(
+                        initiallyExpanded: true,
+                        tilePadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 4,
+                        ),
+                        childrenPadding: const EdgeInsets.fromLTRB(
+                          16,
+                          0,
+                          16,
+                          14,
+                        ),
+                        leading: const Icon(
+                          Icons.auto_graph,
+                          color: Color(0xFF2563EB),
+                        ),
+                        title: Text(
+                          tr('System mission — what DDS does'),
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        subtitle: Text(
+                          tr(
+                            'Forecasts trends · detects outbreaks · explains patterns',
+                          ),
+                          style: const TextStyle(fontSize: 11),
+                        ),
+                        children: [
+                          for (final p in const [
+                            (
+                              Icons.trending_up,
+                              'Mortality Trend Forecasting',
+                              'Projects future mortality over the next 30–90 days using historical death records.',
+                            ),
+                            (
+                              Icons.warning_amber_rounded,
+                              'Early Outbreak Surveillance',
+                              'Monitors real-time clustering of deaths across districts to trigger early warnings.',
+                            ),
+                            (
+                              Icons.hub_outlined,
+                              'Cause-of-Death Pattern Explorer',
+                              'Correlates demographics and ICD-10 findings to identify leading mortality drivers.',
+                            ),
+                          ])
+                            ListTile(
+                              dense: true,
+                              contentPadding: EdgeInsets.zero,
+                              leading: Icon(p.$1, size: 20),
+                              title: Text(
+                                tr(p.$2),
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              subtitle: Text(
+                                tr(p.$3),
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  height: 1.3,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
                   // Welcome banner — mirrors the web header card
                   Card(
                     child: Padding(

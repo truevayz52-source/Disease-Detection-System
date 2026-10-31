@@ -14,6 +14,8 @@ import { config } from "../config.js"
 import crypto from "node:crypto"
 import { z } from "zod"
 import { requireAuth, requireRole } from "../auth/middleware.js"
+import { ttlCache } from "../lib/cache.js"
+import { caseInsights } from "../lib/insights.js"
 import { newId, query } from "../db.js"
 import { writeAudit } from "../lib/audit.js"
 import { notifyUser } from "./notifications-realtime.js"
@@ -41,7 +43,7 @@ const LIST_SELECT = `
   LEFT JOIN users a2 ON a2.user_id = dn.assigned_to`
 
 // Death notifications (Ch 4.2 input, Ch 4.4 step 1).
-notificationsRouter.get("/", requireAuth, async (req, res) => {
+notificationsRouter.get("/", requireAuth, ttlCache(8), async (req, res) => {
   const where: string[] = []
   const params: any[] = []
   // Medical officers see only their own facility's submissions (RBAC scoping).
@@ -60,6 +62,10 @@ notificationsRouter.get("/", requireAuth, async (req, res) => {
   if (req.query.district) {
     where.push("f.district = ?")
     params.push(String(req.query.district))
+  }
+  if (req.query.category) {
+    where.push("dn.preliminary_icd_code IN (SELECT icd_code FROM icd_codes WHERE disease_category = ?)")
+    params.push(String(req.query.category))
   }
   if (req.query.icd) {
     where.push("dn.preliminary_icd_code = ?")
@@ -115,6 +121,17 @@ notificationsRouter.get("/:id", requireAuth, async (req, res) => {
     ),
   ])
   res.json({ notification: row, images, autopsy: autopsy[0] ?? null, certification: certification[0] ?? null })
+})
+
+/** Rule-based per-case interpretation: one plain-language bullet per system
+ *  objective (trend impact, outbreak status, pattern recognition). Powers the
+ *  "System Intelligence Summary" panel shown after data entry and on every
+ *  case record. */
+notificationsRouter.get("/:id/insights", requireAuth, async (req, res) => {
+  if (!await canAccessNotification(req.user!, req.params.id)) return res.status(403).json({ error: "Record unavailable" })
+  const insights = await caseInsights(req.params.id)
+  if (!insights) return res.status(404).json({ error: "Notification not found" })
+  res.json(insights)
 })
 
 const patchSchema = z.object({

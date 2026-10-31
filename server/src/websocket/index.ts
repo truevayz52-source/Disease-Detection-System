@@ -16,7 +16,7 @@ export function attachRealtime(server:HttpServer){
   io.use(async(socket,next)=>{try{const token=socket.handshake.auth.token;if(typeof token!=="string")return next(Error("Unauthorized"));const user=await valid(token);if(!user)return next(Error("Unauthorized"));socket.data.userId=user;next()}catch{next(Error("Service unavailable"))}})
   io.on("connection",socket=>{
     const refresh=async()=>{try{if(!await valid(socket.handshake.auth.token))socket.disconnect(true)}catch{socket.disconnect(true)}}
-    const notify=async(userId:string)=>{if(userId!==socket.data.userId)return;try{if(await valid(socket.handshake.auth.token))socket.emit("inbox:changed");else socket.disconnect(true)}catch{socket.disconnect(true)}}
+    const notify=async(userId:string,payload?:unknown)=>{if(userId!==socket.data.userId)return;try{if(await valid(socket.handshake.auth.token))socket.emit("inbox:changed",payload);else socket.disconnect(true)}catch{socket.disconnect(true)}}
     events.on("inbox",notify)
     const timer=setInterval(refresh,15000)
     socket.on("disconnect",()=>{clearInterval(timer);events.off("inbox",notify)})

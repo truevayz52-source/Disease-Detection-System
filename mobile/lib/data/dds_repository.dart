@@ -72,6 +72,12 @@ class DdsRepository {
     );
   }
 
+  /// GET /notifications/:id/insights — server-generated plain-language
+  /// interpretation per objective ("System Intelligence Summary"). Returns
+  /// {caseRef, district, category, insights[{objective,label,text}]}.
+  Future<Map<String, dynamic>> caseInsights(String id) async =>
+      await _api.get('/notifications/$id/insights') as Map<String, dynamic>;
+
   /// POST /notifications — returns notificationId (+ any alerts raised).
   Future<NotificationCreated> createNotification(
     Map<String, dynamic> payload,

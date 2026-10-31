@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react"
-import { Link } from "react-router-dom"
+import { Link, useSearchParams } from "react-router-dom"
 import useSWR from "swr"
 import { Baby, ClipboardList, Download, Eye, FileCheck, Hourglass, Microscope, Plus, RefreshCw, Search } from "lucide-react"
 import { SiteHeader } from "@/components/site-header"
@@ -37,9 +37,10 @@ function exportCsv(items: DeathNotification[], t: (s: string) => string) {
 export default function NotificationsPage() {const{t}=usePreferences();
   const { user } = useAuth()
   const canCreate = !!user && ["medical_officer", "mortuary_clerk"].includes(user.role)
+  const [sp] = useSearchParams()
   const [q, setQ] = useState("")
-  const [status, setStatus] = useState("all")
-  const [district, setDistrict] = useState("all")
+  const [status, setStatus] = useState(sp.get("status") ?? "all")
+  const [district, setDistrict] = useState(sp.get("district") ?? "all")
   const [mpdsrOnly, setMpdsrOnly] = useState(false)
   const [sort, setSort] = useState<"newest" | "oldest">("newest")
 
@@ -47,6 +48,7 @@ export default function NotificationsPage() {const{t}=usePreferences();
   if (q) params.set("q", q)
   if (status !== "all") params.set("status", status)
   if (district !== "all") params.set("district", district)
+  if (sp.get("category")) params.set("category", sp.get("category")!)
   const { data, isLoading, mutate } = useSWR<{ items: DeathNotification[] }>(`/notifications?${params}`, fetcher)
 
   const items = useMemo(() => {

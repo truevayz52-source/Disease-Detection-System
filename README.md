@@ -212,6 +212,13 @@ covering three Zimbabwean languages:
   strings; missing entries always fall back to English (never raw keys).
 - **Selectors:** web site header + My Profile page, mobile app bar + profile.
   Selection persists locally and syncs to `users.language` when signed in.
+- **DOM localisation layer (web):** `useLocalizedDom`
+  (`client/src/lib/dom-localize.ts`, mounted in `PreferencesProvider`)
+  translates literal text nodes and `placeholder`/`title`/`aria-label`
+  attributes that never went through `t()`, via a MutationObserver +
+  TreeWalker sweep over `document.body`. Originals are kept (WeakMap +
+  `data-i18n-*`) so switching back to English restores source text; scripts,
+  code blocks, textareas and any `[data-i18n-skip]` subtree are left alone.
 - **Workflow:** `pnpm i18n:scan` regenerates the key inventory into
   `i18n/lang/en.json`; `pnpm i18n:sync` copies dictionaries into
   `mobile/assets/lang/` and `client/src/i18n/`; `pnpm i18n:check` validates

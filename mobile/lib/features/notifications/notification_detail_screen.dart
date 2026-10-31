@@ -1,4 +1,5 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide InputDecoration, Text, TextSpan;
+import 'package:dds_mobile/l10n/localized_widgets.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
@@ -31,6 +32,7 @@ class NotificationDetailScreen extends StatefulWidget {
 class _NotificationDetailScreenState extends State<NotificationDetailScreen> {
   NotificationDetail? _detail;
   Map<String, dynamic>? _local;
+  Map<String, dynamic>? _insights;
   Object? _error;
   bool _uploading = false;
 
@@ -42,7 +44,13 @@ class _NotificationDetailScreenState extends State<NotificationDetailScreen> {
 
   Future<void> _load() async {
     try {
-      final d = await context.read<DdsRepository>().notification(widget.id);
+      final repo = context.read<DdsRepository>();
+      final d = await repo.notification(widget.id);
+      // Best-effort: the per-case intelligence summary is optional — a
+      // failure never blocks the record itself.
+      repo.caseInsights(widget.id).then((i) {
+        if (mounted) setState(() => _insights = i);
+      }).catchError((_) {});
       if (mounted) {
         setState(() {
           _detail = d;
@@ -144,6 +152,7 @@ class _NotificationDetailScreenState extends State<NotificationDetailScreen> {
               child: ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
+                  if (_insights != null) _insightsCard(),
                   Card(
                     child: Padding(
                       padding: const EdgeInsets.all(16),
@@ -465,6 +474,54 @@ class _NotificationDetailScreenState extends State<NotificationDetailScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  /// System Intelligence Summary — the server-written per-objective
+  /// interpretation, identical strings to the web card.
+  Widget _insightsCard() {
+    final items = (_insights?['insights'] as List? ?? []);
+    return Card(
+      color: const Color(0xFFEFF6FF),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: const BorderSide(color: Color(0xFFBFDBFE)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              tr('System Intelligence Summary'),
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+            ),
+            const SizedBox(height: 8),
+            for (final i in items)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${i['label']}',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black54,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${i['text']}',
+                      style: const TextStyle(fontSize: 13, height: 1.35),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
     );
   }
 }

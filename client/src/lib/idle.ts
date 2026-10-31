@@ -6,7 +6,7 @@ import { getToken } from "./api"
 /** How long a session can sit idle before the client auto-signs out.
  *  Must be shorter than the server's SESSION_IDLE_MINUTES so the client
  *  always ends the session before the server-side row lapses. */
-const IDLE_MINUTES = 28
+const IDLE_MINUTES = 4
 const WARNING_MINUTES = 2 // toast heads-up this long before signing out
 const MS_IDLE = IDLE_MINUTES * 60_000
 const MS_WARN = (IDLE_MINUTES - WARNING_MINUTES) * 60_000

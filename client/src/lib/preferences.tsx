@@ -1,8 +1,9 @@
-import { createContext, useContext, useState, useEffect, useMemo, type ReactNode } from "react"
+import { createContext, useContext, useState, useEffect, useMemo, useCallback, type ReactNode } from "react"
 import { api } from "./api"
 import { useAuth } from "./auth"
 import languagesMetaJson from "../i18n/languages.json"
 import { setDateLocale } from "./format"
+import { useLocalizedDom } from "./dom-localize"
 
 // Canonical 16-language registry (synced from i18n/languages.json).
 export type Language = keyof typeof languagesMetaJson
@@ -103,18 +104,24 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     if (user) void api("/user/preferences", { method: "PATCH", body: JSON.stringify({ key, value }) }).catch(() => {})
   }
 
+  const t = useCallback<Preferences["t"]>((s, vars) => {
+    let out = dict[s] || s
+    if (vars) out = out.replace(/\{(\w+)\}/g, (m, k) => vars[k] != null ? String(vars[k]) : m)
+    return out
+  }, [dict])
+
+  // DOM-level localisation: translates literal text nodes and placeholder/
+  // title/aria-label attributes that never went through t().
+  useLocalizedDom(useCallback((s: string) => t(s), [t]))
+
   const value = useMemo<Preferences>(() => ({
     theme,
     language,
     languageInfo: languageInfo(language),
     setTheme: (v) => { setThemeState(v); save("theme", v) },
     setLanguage: (v) => { setLanguageState(v); save("language", v) },
-    t: (s, vars) => {
-      let out = dict[s] || s
-      if (vars) out = out.replace(/\{(\w+)\}/g, (m, k) => vars[k] != null ? String(vars[k]) : m)
-      return out
-    },
-  }), [theme, language, dict])
+    t,
+  }), [theme, language, t])
 
   return <Context.Provider value={value}>{children}</Context.Provider>
 }

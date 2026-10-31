@@ -2,10 +2,11 @@ import { Router } from "../lib/router.js"
 import { requireAuth, requireRole } from "../auth/middleware.js"
 import { query } from "../db.js"
 import { writeAudit } from "../lib/audit.js"
+import { ttlCache } from "../lib/cache.js"
 
 export const alertsRouter = Router()
 
-alertsRouter.get("/", requireAuth, async (req, res) => {
+alertsRouter.get("/", requireAuth, ttlCache(10), async (req, res) => {
   const where: string[] = []
   const params: any[] = []
   if (req.query.status) {
@@ -48,7 +49,7 @@ alertsRouter.get("/stats", requireAuth, async (_req, res) => {
   })
 })
 
-alertsRouter.get("/active-count", requireAuth, async (_req, res) => {
+alertsRouter.get("/active-count", requireAuth, ttlCache(15), async (_req, res) => {
   const rows = await query<any[]>("SELECT COUNT(*) AS count FROM outbreak_alerts WHERE status = 'active'")
   res.json({ count: Number(rows[0]?.count ?? 0) })
 })

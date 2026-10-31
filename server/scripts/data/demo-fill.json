@@ -1,0 +1,50 @@
+[
+  {
+    "patient": { "nationalId": null, "fullName": "Baby of C. Mukono", "age": 0, "gender": "male", "residentialAddress": "15 Highfield, Harare", "latitude": -17.8812, "longitude": 30.9854 },
+    "facilityId": "00000000-0000-4000-8000-000000000001",
+    "dateOfDeath": "2026-09-05T07:30:00.000Z",
+    "preliminaryIcdCode": "P95",
+    "clinicalSummary": "Stillborn at 36 weeks following reported reduced fetal movements for three days. Mother booked, labour spontaneous and uncomplicated. Macerated stillbirth — cause undetermined pending perinatal review.",
+    "isMaternalPerinatal": true
+  },
+  {
+    "patient": { "nationalId": null, "fullName": "Baby of N. Marowa", "age": 0, "gender": "female", "residentialAddress": "21 Sakubva, Mutare", "latitude": -18.9935, "longitude": 32.6352 },
+    "facilityId": "00000000-0000-4000-8000-000000000004",
+    "dateOfDeath": "2026-10-09T16:20:00.000Z",
+    "preliminaryIcdCode": "P95",
+    "clinicalSummary": "Early neonatal death on day 2 of life. Born at 37 weeks after prolonged labour; poor Apgar scores, required resuscitation and admitted to NICU where the baby deteriorated overnight. Perinatal death review initiated.",
+    "isMaternalPerinatal": true
+  },
+  {
+    "patient": { "nationalId": "63-5512384Y40", "fullName": "Paidamoyo Dube", "age": 82, "gender": "male", "residentialAddress": "6 Mzilikazi, Bulawayo", "latitude": -20.1564, "longitude": 28.5762 },
+    "facilityId": "00000000-0000-4000-8000-000000000003",
+    "dateOfDeath": "2026-09-30T08:10:00.000Z",
+    "preliminaryIcdCode": "R99",
+    "clinicalSummary": "Elderly man living alone, found deceased by a neighbour after not being seen for two days. No known chronic illness on record and no signs of foul play. Sudden unexplained death — post-mortem requested.",
+    "isMaternalPerinatal": false
+  },
+  {
+    "patient": { "nationalId": "63-9164803Z26", "fullName": "Chipo Gumbo", "age": 44, "gender": "female", "residentialAddress": "73 Mufakose, Harare", "latitude": -17.9398, "longitude": 30.9989 },
+    "facilityId": "00000000-0000-4000-8000-000000000001",
+    "dateOfDeath": "2026-10-27T13:55:00.000Z",
+    "preliminaryIcdCode": "R99",
+    "clinicalSummary": "Collapsed suddenly at a bus stop and was pulseless on arrival of ambulance crew; resuscitation unsuccessful. No prior medical history available. Death referred for post-mortem to establish cause.",
+    "isMaternalPerinatal": false
+  },
+  {
+    "patient": { "nationalId": "63-2648517B93", "fullName": "Farai Zhou", "age": 30, "gender": "male", "residentialAddress": "48 Chikanga, Mutare", "latitude": -19.0021, "longitude": 32.6140 },
+    "facilityId": "00000000-0000-4000-8000-000000000004",
+    "dateOfDeath": "2026-09-07T22:05:00.000Z",
+    "preliminaryIcdCode": "X59",
+    "clinicalSummary": "Victim of a hit-and-run road traffic accident on the Mutare–Nyanga road; brought in by passers-by with severe head and chest injuries. Certified dead on arrival. Police investigation opened.",
+    "isMaternalPerinatal": false
+  },
+  {
+    "patient": { "nationalId": "63-7096128C17", "fullName": "Tinashe Chirume", "age": 26, "gender": "male", "residentialAddress": "10 Mkoba Village 4, Gweru", "latitude": -19.4589, "longitude": 29.8062 },
+    "facilityId": "00000000-0000-4000-8000-000000000005",
+    "dateOfDeath": "2026-10-18T15:30:00.000Z",
+    "preliminaryIcdCode": "X59",
+    "clinicalSummary": "Recovered unresponsive from the Gweru River after reportedly swimming with friends. Prolonged submersion; resuscitation at the scene and in casualty unsuccessful. Drowning — circumstances under police investigation.",
+    "isMaternalPerinatal": false
+  }
+]

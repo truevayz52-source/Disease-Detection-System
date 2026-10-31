@@ -63,7 +63,7 @@ export const config = {
   predictionsMinPoints: Number(process.env.PREDICTIONS_MIN_POINTS ?? 3),
   // Sliding idle-session timeout — the session's expires_at is bumped forward
   // on every authenticated request; it lapses when idle longer than this.
-  sessionIdleMinutes: Number(process.env.SESSION_IDLE_MINUTES ?? 30),
+  sessionIdleMinutes: Number(process.env.SESSION_IDLE_MINUTES ?? 5),
   communityApiKey: process.env.COMMUNITY_API_KEY ?? null,
   // Basemap tiles for the web/mobile surveillance maps — see lib/map-tiles.ts.
   googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY ?? null,

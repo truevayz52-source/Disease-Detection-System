@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit",
     "migrate": "tsx scripts/migrate.ts",
     "reset:cases": "tsx scripts/reset-cases.ts",
+    "feed:cases": "tsx scripts/feed-demo-cases.ts",
     "test": "tsx --test tests/*.test.ts"
   },
   "dependencies": {

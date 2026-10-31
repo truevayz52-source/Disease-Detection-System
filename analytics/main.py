@@ -24,6 +24,7 @@ class CasePoint(BaseModel):
     lat: float
     lng: float
     district: Optional[str] = None
+    province: Optional[str] = None
 
 
 class ClusterRequest(BaseModel):
@@ -65,8 +66,11 @@ def _fit_and_predict(counts: List[float], indices: List[int], periods: int, seas
     """Fit a trend (+ optional Fourier seasonality) linear model and predict ahead."""
     y = np.array([float(c) for c in counts])
     x = np.array([int(i) for i in indices]).reshape(-1, 1)
-    # Need at least 8 points to fit trend + 4 Fourier terms without overfitting.
-    use_seasonal = seasonal > 0 and len(indices) >= 8
+    # Seasonality can only be estimated once the series spans at least two
+    # full seasonal cycles — fitting 4 Fourier terms of period 52 onto ~10
+    # weekly points produces wild extrapolations, so fall back to a plain
+    # trend until real seasonal history exists.
+    use_seasonal = seasonal > 0 and len(indices) >= max(8, 2 * seasonal)
     if use_seasonal:
         s = 2 * np.pi * x.flatten() / seasonal
         X = np.column_stack([x, np.sin(s), np.cos(s), np.sin(2 * s), np.cos(2 * s)])
@@ -108,6 +112,12 @@ def health():
     return {"status": "ok", "engine": "scikit-learn"}
 
 
+def _dominant(members: List[CasePoint], attr: str) -> Optional[str]:
+    """Most common non-empty attribute value among cluster members."""
+    vals = [getattr(m, attr) for m in members if getattr(m, attr)]
+    return max(set(vals), key=vals.count) if vals else None
+
+
 @app.post("/cluster", response_model=dict)
 def cluster(req: ClusterRequest):
     # Cluster per disease category so unrelated diseases never merge.
@@ -126,6 +136,8 @@ def cluster(req: ClusterRequest):
                 "centroid_lat": lat,
                 "centroid_lng": lng,
                 "ids": [p.id for p in pts],
+                "district": _dominant(pts, "district"),
+                "province": _dominant(pts, "province"),
             })
             continue
 
@@ -143,6 +155,8 @@ def cluster(req: ClusterRequest):
                 "centroid_lat": lat,
                 "centroid_lng": lng,
                 "ids": [m.id for m in members],
+                "district": _dominant(members, "district"),
+                "province": _dominant(members, "province"),
                 "noise": bool(label == -1),
             })
 

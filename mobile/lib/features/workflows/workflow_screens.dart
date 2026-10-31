@@ -1,6 +1,7 @@
 import 'dart:convert' show jsonDecode;
 
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide InputDecoration, Text, TextSpan;
+import 'package:dds_mobile/l10n/localized_widgets.dart';
 import 'package:provider/provider.dart';
 
 import '../../data/api_client.dart';
