@@ -96,7 +96,7 @@ const explainSchema = z.object({
 aiRouter.post(
   "/explain",
   requireAuth,
-  requireRole("medical_officer", "pathologist", "public_health_analyst", "executive"),
+  requireRole("medical_officer", "pathologist", "public_health_analyst", "executive", "system_admin"),
   rateLimiter(30),
   async (req, res) => {
     const parsed = explainSchema.safeParse(req.body)

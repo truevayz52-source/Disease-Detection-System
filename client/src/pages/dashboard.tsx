@@ -7,6 +7,7 @@ import {
 } from "recharts"
 import { SiteHeader } from "@/components/site-header"
 import { AlertAnnouncer } from "@/components/alert-announcer"
+import { SystemMission } from "@/components/system-mission"
 import { InfoTooltip } from "@/components/info-tooltip"
 import { StatCard } from "@/components/stat-card"
 import { DepthDefs, grad, shadow } from "@/components/chart-3d"
@@ -122,6 +123,9 @@ export default function DashboardPage() {const{t}=usePreferences();
             </Button>
           )}
         </div>
+
+        {/* System Mission — self-explaining statement of what DDS does & primary navigation pillars */}
+        <SystemMission />
 
         {/* Objective 2 — live surveillance strip + automatic anomaly flags:
             the page itself announces that early detection is running and

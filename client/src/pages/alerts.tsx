@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react"
 import useSWR from "swr"
 import { toast } from "sonner"
-import { Activity, AlertTriangle, CheckCircle2, Loader2, RefreshCw, Search, Siren, SlidersHorizontal, Users } from "lucide-react"
+import { Activity, AlertTriangle, CheckCircle2, ChevronDown, Info, Loader2, RefreshCw, Search, Siren, SlidersHorizontal, Sparkles, Users } from "lucide-react"
 import { SiteHeader } from "@/components/site-header"
 import { StatCard } from "@/components/stat-card"
 import { Badge } from "@/components/ui/badge"
@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { api } from "@/lib/api"
 import { useAuth } from "@/lib/auth"
+import { aiExplain, generateRuleBasedExplanation } from "@/lib/ai"
 import { fmtDateTime, riskVariant, STATUS_LABELS } from "@/lib/format"
 import type { OutbreakAlert } from "@/lib/types"
 import { usePreferences } from "@/lib/preferences"
@@ -33,6 +34,35 @@ export default function AlertsPage() {const{t}=usePreferences();
   const [minRisk, setMinRisk] = useState("0")
   const [search, setSearch] = useState("")
   const [sort, setSort] = useState<"recent" | "risk" | "cases">("recent")
+  const [showSurveillanceMap, setShowSurveillanceMap] = useState(false)
+  const [expandedExplains, setExpandedExplains] = useState<Record<string, boolean>>({})
+  const [aiExplaining, setAiExplaining] = useState<Record<string, boolean>>({})
+  const [aiExplanations, setAiExplanations] = useState<Record<string, { explanation: string; provider: string }>>({})
+
+  const toggleExplain = (alertId: string) => {
+    setExpandedExplains((prev) => ({ ...prev, [alertId]: !prev[alertId] }))
+  }
+
+  const handleAiExplain = async (a: OutbreakAlert, cluster: Record<string, unknown> | null) => {
+    setAiExplaining((prev) => ({ ...prev, [a.alert_id]: true }))
+    try {
+      const res = await aiExplain("alert", {
+        alertType: a.alert_type,
+        disease: a.disease_category,
+        district: a.district ?? undefined,
+        caseCount: a.case_count,
+        threshold: Number(cluster?.threshold ?? 8),
+        windowDays: cluster?.window_hours ? Math.round(Number(cluster.window_hours) / 24) : 2,
+        severity: a.risk_score && a.risk_score >= 75 ? "critical" : a.risk_score && a.risk_score >= 50 ? "high" : "moderate",
+        triggeredAt: a.triggered_date,
+      })
+      setAiExplanations((prev) => ({ ...prev, [a.alert_id]: res }))
+    } catch {
+      toast.error(t("Could not generate clinical explanation"))
+    } finally {
+      setAiExplaining((prev) => ({ ...prev, [a.alert_id]: false }))
+    }
+  }
 
   const { data, mutate, isValidating } = useSWR<{ items: OutbreakAlert[] }>(
     `/alerts?${status !== "all" ? `status=${status}&` : ""}${type !== "all" ? `type=${type}` : ""}`,
@@ -117,6 +147,67 @@ export default function AlertsPage() {const{t}=usePreferences();
     <>
       <SiteHeader title={t("Alerts")} />
       <div className="space-y-4 p-4 lg:p-6">
+        {/* Objective 2 Self-Explaining Architecture Card */}
+        <div className="rounded-2xl border border-amber-200/90 bg-gradient-to-r from-amber-50/80 via-card to-card p-5 shadow-md">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <Badge className="bg-amber-600 text-white font-semibold text-xs px-2.5 py-0.5">
+                  {t("System Objective 2")}
+                </Badge>
+                <span className="font-bold text-foreground text-sm tracking-tight">
+                  {t("To Detect Outbreaks Early")}
+                </span>
+                <span className="relative flex size-2">
+                  <span className="absolute inline-flex size-full animate-ping rounded-full bg-amber-400 opacity-75" />
+                  <span className="relative inline-flex size-2 rounded-full bg-amber-600" />
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed max-w-2xl">
+                {t("Continuous 5-pass surveillance engine scanning every notification and morbidity signal. Crucially includes pre-mortality detection passes (Community Signals & Syndromic Morbidity) that trigger early warnings before fatalities accumulate.")}
+              </p>
+            </div>
+
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setShowSurveillanceMap(!showSurveillanceMap)}
+              className="h-8 text-xs font-semibold bg-white hover:bg-amber-50 text-amber-800 border-amber-200 gap-1.5 shadow-2xs"
+            >
+              <Siren className="size-3.5 text-amber-600" />
+              {showSurveillanceMap ? t("Hide Surveillance Layers") : t("Explain 5 Surveillance Layers")}
+              <ChevronDown className={`size-3.5 transition-transform duration-200 ${showSurveillanceMap ? "rotate-180" : ""}`} />
+            </Button>
+          </div>
+
+          {showSurveillanceMap && (
+            <div className="mt-4 pt-4 border-t border-amber-200/80 space-y-2 text-xs animate-in fade-in-50 duration-200">
+              <div className="grid gap-2 sm:grid-cols-5">
+                <div className="p-2.5 rounded-lg border border-amber-200 bg-white/90">
+                  <span className="font-bold text-amber-900 block text-[11px]">Pass 1: Auto-Expiry</span>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">{t("Auto-resolves alerts >14d so a renewed cluster re-alerts without alert fatigue.")}</p>
+                </div>
+                <div className="p-2.5 rounded-lg border border-amber-200 bg-white/90">
+                  <span className="font-bold text-amber-900 block text-[11px]">Pass 2: Threshold</span>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">{t("DBSCAN spatial clustering on district deaths exceeding statutory threshold.")}</p>
+                </div>
+                <div className="p-2.5 rounded-lg border border-amber-200 bg-white/90">
+                  <span className="font-bold text-amber-900 block text-[11px]">Pass 3: Poisson CUSUM</span>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">{t("One-sided cumulative sum detecting low-volume rare notifiable anomalies before thresholds.")}</p>
+                </div>
+                <div className="p-2.5 rounded-lg border border-emerald-200 bg-emerald-50/70">
+                  <span className="font-bold text-emerald-900 block text-[11px]">Pass 4: Community</span>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">{t("Aggregates field health signals and public USSD/WhatsApp reports per district (pre-mortality).")}</p>
+                </div>
+                <div className="p-2.5 rounded-lg border border-emerald-200 bg-emerald-50/70">
+                  <span className="font-bold text-emerald-900 block text-[11px]">Pass 5: Syndromic</span>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">{t("Aggregates facility FHIR/REST outpatient morbidity case counts to alert before any death exists.")}</p>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* Summary strip */}
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           {statCards.map((c) => (
@@ -250,11 +341,72 @@ export default function AlertsPage() {const{t}=usePreferences();
                     {a.resolved_at && <span className="text-emerald-600">{t("Resolved:")} {fmtDateTime(a.resolved_at)}</span>}
                   </div>
 
-                  {canResolve && a.status === "active" && (
-                    <div className="flex justify-end pt-1">
+                  {/* Actions & Self-Explanation Bar */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-border/40">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => toggleExplain(a.alert_id)}
+                      className="h-8 px-2.5 text-xs font-semibold text-primary hover:text-primary/90 gap-1.5 hover:bg-primary/5"
+                    >
+                      <Sparkles className="size-3.5 text-amber-500" />
+                      {expandedExplains[a.alert_id] ? t("Hide explanation") : t("Explain detection")}
+                      <ChevronDown className={`size-3.5 transition-transform duration-200 ${expandedExplains[a.alert_id] ? "rotate-180" : ""}`} />
+                    </Button>
+
+                    {canResolve && a.status === "active" && (
                       <Button size="sm" variant={critical ? "destructive" : "outline"} onClick={() => resolve(a.alert_id)}>
                         <CheckCircle2 className="size-4" /> {t("Resolve alert")}
                       </Button>
+                    )}
+                  </div>
+
+                  {/* Expandable Explanation Panel (Objective 2 Self-Explaining System) */}
+                  {expandedExplains[a.alert_id] && (
+                    <div className="mt-2 space-y-3 rounded-xl border border-blue-200/80 bg-blue-50/50 p-3.5 text-xs">
+                      <div>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="font-semibold text-blue-950 flex items-center gap-1.5">
+                            <Info className="size-3.5 text-blue-600" />
+                            {t("Surveillance Methodology & Rationale")}
+                          </span>
+                          <Badge variant="outline" className="text-[10px] bg-white border-blue-300 text-blue-800 font-medium">
+                            {a.alert_type === "mpdsr" ? "Pass: MPDSR Statutory" : cluster?.detection === "cusum" ? "Pass 3: Poisson CUSUM" : cluster?.detection === "syndromic" ? "Pass 5: Syndromic" : "Pass 2: Threshold Cluster"}
+                          </Badge>
+                        </div>
+                        <p className="text-slate-700 leading-relaxed">
+                          {generateRuleBasedExplanation("alert", {
+                            alertType: a.alert_type,
+                            disease: a.disease_category,
+                            district: a.district ?? undefined,
+                            caseCount: a.case_count,
+                            threshold: Number(cluster?.threshold ?? 8),
+                            windowDays: cluster?.window_hours ? Math.round(Number(cluster.window_hours) / 24) : 2,
+                          })}
+                        </p>
+                      </div>
+
+                      {/* AI Clinical Narrative Synthesis */}
+                      {aiExplanations[a.alert_id] ? (
+                        <div className="rounded-lg border border-emerald-200 bg-emerald-50/80 p-2.5">
+                          <div className="flex items-center justify-between text-[11px] font-semibold text-emerald-800 mb-1">
+                            <span className="flex items-center gap-1"><Sparkles className="size-3 text-emerald-600" /> {t("Clinical AI Synthesis")}</span>
+                            <span className="text-[10px] text-emerald-700/80 uppercase font-mono font-normal">{aiExplanations[a.alert_id].provider}</span>
+                          </div>
+                          <p className="text-emerald-950 leading-relaxed text-xs">{aiExplanations[a.alert_id].explanation}</p>
+                        </div>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={aiExplaining[a.alert_id]}
+                          onClick={() => handleAiExplain(a, cluster)}
+                          className="w-full bg-white hover:bg-slate-50 text-xs text-slate-700 border-blue-200/90 gap-1.5 shadow-2xs"
+                        >
+                          <Sparkles className={`size-3 text-amber-500 ${aiExplaining[a.alert_id] ? "animate-spin" : ""}`} />
+                          {aiExplaining[a.alert_id] ? t("Synthesizing clinical narrative…") : t("Generate AI Clinical Narrative")}
+                        </Button>
+                      )}
                     </div>
                   )}
                 </CardContent>
