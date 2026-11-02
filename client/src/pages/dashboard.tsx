@@ -1,13 +1,12 @@
 import { Link } from "react-router-dom"
 import useSWR from "swr"
-import { Activity, AlertTriangle, Baby, ClipboardList, FileCheck, Hourglass, Plus, Siren } from "lucide-react"
+import { Activity, AlertTriangle, Baby, ClipboardList, FileCheck, Hourglass, Plus, Siren, TrendingUp } from "lucide-react"
 import {
-  Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Legend,
-  Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
+  Area, Bar, BarChart, CartesianGrid, Cell, ComposedChart, Legend, Line,
+  Pie, PieChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts"
 import { SiteHeader } from "@/components/site-header"
 import { AlertAnnouncer } from "@/components/alert-announcer"
-import { SystemMission } from "@/components/system-mission"
 import { InfoTooltip } from "@/components/info-tooltip"
 import { StatCard } from "@/components/stat-card"
 import { DepthDefs, grad, shadow } from "@/components/chart-3d"
@@ -39,6 +38,18 @@ interface DashboardData {
   byStatus: { status: string; count: number }[]
 }
 
+interface DashboardPredictions {
+  granularity: "daily" | "weekly"
+  overall: {
+    series: { label: string; count: number }[]
+    forecast: { label: string; predicted: number }[]
+    directionPct: number
+    forecastMethod: "seasonal" | "regression" | "rate-baseline" | null
+    summary: string[]
+  }
+  metrics: { projectedTotal: number; projectedPeriod: string }
+}
+
 const fetcher = <T,>(url: string) => api<T>(url)
 
 const CATEGORY_COLORS = ["#e11d48", "#f59e0b", "#8b5cf6", "#0ea5e9", "#10b981", "#f97316", "#64748b", "#d946ef"]
@@ -58,6 +69,8 @@ export default function DashboardPage() {const{t}=usePreferences();
   const { data } = useSWR<DashboardData>("/analytics/dashboard", fetcher, { refreshInterval: 60_000 })
   const { data: notifications } = useSWR<{ items: DeathNotification[] }>("/notifications", fetcher)
   const { data: alerts, mutate: mutateAlerts } = useSWR<{ items: OutbreakAlert[] }>("/alerts?status=active", fetcher, { refreshInterval: 30_000 })
+  // Analyst/executive-only endpoint — other roles just don't get the forecast extras.
+  const { data: preds } = useSWR<DashboardPredictions>("/analytics/predictions", fetcher, { refreshInterval: 60_000, shouldRetryOnError: false })
 
   const k = data?.kpis
   const alertTypeName = (a: OutbreakAlert) =>
@@ -81,6 +94,23 @@ export default function DashboardPage() {const{t}=usePreferences();
   // surveillance strip plus automatic anomaly flags naming what was caught.
   const detections = (alerts?.items ?? []).filter((a) => a.alert_type !== "mpdsr")
   const monitoredProvinces = data?.byProvince.length ?? 0
+
+  // Objective 1 — surface the forecast on the dashboard itself: the trend
+  // chart draws the model's projection as a dashed line after "now", and a
+  // compact card states the projected total in plain language.
+  const fc = preds?.overall
+  const hasForecast = !!fc?.forecast?.length
+  const methodLabel = fc?.forecastMethod === "seasonal" ? t("Seasonal model") : fc?.forecastMethod === "regression" ? t("Regression model") : t("Baseline rate")
+  const trendSeries = hasForecast && fc!.series.length
+    ? fc!.series
+    : (data?.daily ?? []).map((d) => ({ label: d.day, count: d.count }))
+  const lastActual = trendSeries[trendSeries.length - 1]
+  const trendData = [
+    ...trendSeries.map((s) => ({ label: s.label, actual: s.count as number | null, predicted: null as number | null })),
+    // Bridge point so the dashed line starts where the actuals end.
+    ...(hasForecast && lastActual ? [{ label: lastActual.label, actual: null, predicted: lastActual.count }] : []),
+    ...(fc?.forecast ?? []).map((f) => ({ label: f.label, actual: null, predicted: f.predicted })),
+  ]
 
   // Objective 3 — cause-of-death patterns: group ICD categories into an
   // etiology mix and generate plain-language takeaways from live data.
@@ -124,9 +154,6 @@ export default function DashboardPage() {const{t}=usePreferences();
           )}
         </div>
 
-        {/* System Mission — self-explaining statement of what DDS does & primary navigation pillars */}
-        <SystemMission />
-
         {/* Objective 2 — live surveillance strip + automatic anomaly flags:
             the page itself announces that early detection is running and
             names what it caught, without anyone narrating it. */}
@@ -141,6 +168,7 @@ export default function DashboardPage() {const{t}=usePreferences();
             </p>
             <span className="text-xs text-muted-foreground">
               {detections.length} {t("detection(s) raised")} · {k?.mpdsrLast30Days ?? 0} {t("MPDSR")}
+              {hasForecast && <> · {t("forecast")}: {preds!.metrics.projectedTotal} {t("deaths")} {preds!.metrics.projectedPeriod}</>}
             </span>
           </div>
           {detections.slice(0, 2).map((a) => (
@@ -163,16 +191,63 @@ export default function DashboardPage() {const{t}=usePreferences();
           ))}
         </div>
 
+        {/* Objective 1 — compact forecast card: projected total, direction and
+            model in plain language, linking to the full predictions page. */}
+        {hasForecast && (
+          <Card className="bg-card border border-border/90 shadow-lg rounded-2xl">
+            <CardContent className="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-4">
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-blue-600/10 text-blue-600 ring-1 ring-blue-600/20">
+                <TrendingUp className="size-4.5" />
+              </span>
+              <p className="text-sm font-semibold text-foreground">
+                {t("Forecast")} <span className="font-normal text-muted-foreground">— {fc!.summary[0]}</span>
+              </p>
+              <Badge variant={fc!.directionPct >= 0 ? "destructive" : "secondary"} className="text-[11px] font-semibold">
+                {fc!.directionPct >= 0 ? "+" : ""}{fc!.directionPct}% {fc!.directionPct >= 0 ? t("rising") : t("falling")}
+              </Badge>
+              <Badge variant="outline" className="text-[11px] font-medium">{methodLabel}</Badge>
+              <Link to="/predictions" className="ml-auto text-xs font-semibold text-primary hover:underline">
+                {t("Full forecast")} →
+              </Link>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Objective 3 — automated pattern insights: the system writes its
+            own takeaways from the live aggregates. */}
+        {insights.length > 0 && (
+          <Card className="bg-card border border-border/90 shadow-lg rounded-2xl">
+            <CardContent className="flex flex-col gap-2 px-5 py-4 sm:flex-row sm:items-start sm:gap-6">
+              <p className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground sm:pt-0.5">{t("Pattern insights")}</p>
+              <ul className="space-y-1">
+                {insights.map((line) => (
+                  <li key={line} className="text-xs text-foreground leading-relaxed">{line}</li>
+                ))}
+              </ul>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Charts row 1: mortality trend + status donut */}
         <div className="grid gap-6 lg:grid-cols-3">
           <Card className="lg:col-span-2 bg-card border border-border/90 shadow-lg rounded-2xl overflow-hidden">
             <CardHeader className="border-b border-slate-100 bg-muted/50 px-5 py-4">
-              <CardTitle className="text-sm font-bold text-foreground flex items-center gap-1.5">{t("Mortality trend — last 30 days")}<InfoTooltip text={t("Daily reported deaths — this is the series the forecast model projects forward.")} /></CardTitle>
-              <p className="text-xs text-muted-foreground mt-0.5">{t("Daily notified deaths nationwide")}</p>
+              <CardTitle className="text-sm font-bold text-foreground flex items-center gap-1.5">
+                {hasForecast ? t("Mortality trend & forecast") : t("Mortality trend — last 30 days")}
+                <InfoTooltip text={t("Daily reported deaths — this is the series the forecast model projects forward.")} />
+                {hasForecast && <Badge variant="outline" className="ml-auto text-[10px] font-medium">{methodLabel}</Badge>}
+              </CardTitle>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {hasForecast
+                  ? preds?.granularity === "daily"
+                    ? t("Reported deaths — dashed line projects the next 7 days")
+                    : t("Reported deaths — dashed line projects the next 4 weeks")
+                  : t("Daily notified deaths nationwide")}
+              </p>
             </CardHeader>
             <CardContent className="p-4">
               <ResponsiveContainer width="100%" height={240}>
-                <AreaChart data={data?.daily ?? []} margin={{ top: 4, right: 8, left: -18, bottom: 0 }}>
+                <ComposedChart data={trendData} margin={{ top: 4, right: 8, left: -18, bottom: 0 }}>
                   <defs>
                     <linearGradient id="deaths" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor="#e11d48" stopOpacity={0.35} />
@@ -180,11 +255,18 @@ export default function DashboardPage() {const{t}=usePreferences();
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                  <XAxis dataKey="day" tick={{ fontSize: 10 }} tickFormatter={(d: string) => d.slice(5)} interval="preserveStartEnd" />
+                  {hasForecast && lastActual && (
+                    <ReferenceLine x={lastActual.label} stroke="#64748b" strokeDasharray="2 2" label={{ value: t("now"), position: "top", fontSize: 10, fill: "#64748b" }} />
+                  )}
+                  <XAxis dataKey="label" tick={{ fontSize: 10 }} tickFormatter={(d: string) => d.slice(5)} interval="preserveStartEnd" />
                   <YAxis allowDecimals={false} tick={{ fontSize: 10 }} width={32} />
                   <Tooltip contentStyle={tooltipStyle} labelFormatter={(d) => fmtDate(String(d))} />
-                  <Area type="monotone" dataKey="count" name="Deaths" stroke="#e11d48" strokeWidth={2.5} fill="url(#deaths)" style={{ filter: "drop-shadow(0 4px 5px rgba(225,29,72,0.35))" }} />
-                </AreaChart>
+                  <Area type="monotone" dataKey="actual" name={t("Reported deaths")} stroke="#e11d48" strokeWidth={2.5} fill="url(#deaths)" style={{ filter: "drop-shadow(0 4px 5px rgba(225,29,72,0.35))" }} />
+                  {hasForecast && (
+                    <Line type="monotone" dataKey="predicted" name={t("Forecast")} stroke="#2563eb" strokeWidth={2.5} strokeDasharray="6 4" dot={{ r: 2.5, fill: "#2563eb" }} />
+                  )}
+                  {hasForecast && <Legend iconSize={8} wrapperStyle={{ fontSize: 11 }} />}
+                </ComposedChart>
               </ResponsiveContainer>
             </CardContent>
           </Card>
@@ -267,21 +349,6 @@ export default function DashboardPage() {const{t}=usePreferences();
             </CardContent>
           </Card>
         </div>
-
-        {/* Objective 3 — automated pattern insights: the system writes its
-            own takeaways from the live aggregates. */}
-        {insights.length > 0 && (
-          <Card className="bg-card border border-border/90 shadow-lg rounded-2xl">
-            <CardContent className="flex flex-col gap-2 px-5 py-4 sm:flex-row sm:items-start sm:gap-6">
-              <p className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground sm:pt-0.5">{t("Pattern insights")}</p>
-              <ul className="space-y-1">
-                {insights.map((line) => (
-                  <li key={line} className="text-xs text-foreground leading-relaxed">{line}</li>
-                ))}
-              </ul>
-            </CardContent>
-          </Card>
-        )}
 
         {/* Recent notifications + active alerts */}
         <div className="grid gap-6 lg:grid-cols-3">

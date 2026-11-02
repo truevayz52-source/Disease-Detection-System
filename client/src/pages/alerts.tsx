@@ -34,7 +34,6 @@ export default function AlertsPage() {const{t}=usePreferences();
   const [minRisk, setMinRisk] = useState("0")
   const [search, setSearch] = useState("")
   const [sort, setSort] = useState<"recent" | "risk" | "cases">("recent")
-  const [showSurveillanceMap, setShowSurveillanceMap] = useState(false)
   const [expandedExplains, setExpandedExplains] = useState<Record<string, boolean>>({})
   const [aiExplaining, setAiExplaining] = useState<Record<string, boolean>>({})
   const [aiExplanations, setAiExplanations] = useState<Record<string, { explanation: string; provider: string }>>({})
@@ -147,67 +146,6 @@ export default function AlertsPage() {const{t}=usePreferences();
     <>
       <SiteHeader title={t("Alerts")} />
       <div className="space-y-4 p-4 lg:p-6">
-        {/* Objective 2 Self-Explaining Architecture Card */}
-        <div className="rounded-2xl border border-amber-200/90 bg-gradient-to-r from-amber-50/80 via-card to-card p-5 shadow-md">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <Badge className="bg-amber-600 text-white font-semibold text-xs px-2.5 py-0.5">
-                  {t("System Objective 2")}
-                </Badge>
-                <span className="font-bold text-foreground text-sm tracking-tight">
-                  {t("To Detect Outbreaks Early")}
-                </span>
-                <span className="relative flex size-2">
-                  <span className="absolute inline-flex size-full animate-ping rounded-full bg-amber-400 opacity-75" />
-                  <span className="relative inline-flex size-2 rounded-full bg-amber-600" />
-                </span>
-              </div>
-              <p className="text-xs text-muted-foreground leading-relaxed max-w-2xl">
-                {t("Continuous 5-pass surveillance engine scanning every notification and morbidity signal. Crucially includes pre-mortality detection passes (Community Signals & Syndromic Morbidity) that trigger early warnings before fatalities accumulate.")}
-              </p>
-            </div>
-
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setShowSurveillanceMap(!showSurveillanceMap)}
-              className="h-8 text-xs font-semibold bg-white hover:bg-amber-50 text-amber-800 border-amber-200 gap-1.5 shadow-2xs"
-            >
-              <Siren className="size-3.5 text-amber-600" />
-              {showSurveillanceMap ? t("Hide Surveillance Layers") : t("Explain 5 Surveillance Layers")}
-              <ChevronDown className={`size-3.5 transition-transform duration-200 ${showSurveillanceMap ? "rotate-180" : ""}`} />
-            </Button>
-          </div>
-
-          {showSurveillanceMap && (
-            <div className="mt-4 pt-4 border-t border-amber-200/80 space-y-2 text-xs animate-in fade-in-50 duration-200">
-              <div className="grid gap-2 sm:grid-cols-5">
-                <div className="p-2.5 rounded-lg border border-amber-200 bg-white/90">
-                  <span className="font-bold text-amber-900 block text-[11px]">Pass 1: Auto-Expiry</span>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">{t("Auto-resolves alerts >14d so a renewed cluster re-alerts without alert fatigue.")}</p>
-                </div>
-                <div className="p-2.5 rounded-lg border border-amber-200 bg-white/90">
-                  <span className="font-bold text-amber-900 block text-[11px]">Pass 2: Threshold</span>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">{t("DBSCAN spatial clustering on district deaths exceeding statutory threshold.")}</p>
-                </div>
-                <div className="p-2.5 rounded-lg border border-amber-200 bg-white/90">
-                  <span className="font-bold text-amber-900 block text-[11px]">Pass 3: Poisson CUSUM</span>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">{t("One-sided cumulative sum detecting low-volume rare notifiable anomalies before thresholds.")}</p>
-                </div>
-                <div className="p-2.5 rounded-lg border border-emerald-200 bg-emerald-50/70">
-                  <span className="font-bold text-emerald-900 block text-[11px]">Pass 4: Community</span>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">{t("Aggregates field health signals and public USSD/WhatsApp reports per district (pre-mortality).")}</p>
-                </div>
-                <div className="p-2.5 rounded-lg border border-emerald-200 bg-emerald-50/70">
-                  <span className="font-bold text-emerald-900 block text-[11px]">Pass 5: Syndromic</span>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">{t("Aggregates facility FHIR/REST outpatient morbidity case counts to alert before any death exists.")}</p>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-
         {/* Summary strip */}
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           {statCards.map((c) => (

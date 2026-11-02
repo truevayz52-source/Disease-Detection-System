@@ -1,16 +1,6 @@
-import { useState } from "react"
 import useSWR from "swr"
 import { InfoTooltip } from "@/components/info-tooltip"
-import {
-  BrainCircuit,
-  Calculator,
-  ChevronDown,
-  Info,
-  Minus,
-  Sparkles,
-  TrendingDown,
-  TrendingUp,
-} from "lucide-react"
+import { Minus, TrendingDown, TrendingUp } from "lucide-react"
 import {
   CartesianGrid,
   Legend,
@@ -147,7 +137,6 @@ const BANNER_STYLE = {
 
 export default function PredictionsPage() {
   const { t } = usePreferences()
-  const [showMethodology, setShowMethodology] = useState(false)
   const { data } = useSWR<Predictions>("/analytics/predictions", (u: string) => api(u), { refreshInterval: 15_000 })
   const banner = data?.banner ? BANNER_STYLE[data.banner.state] : null
   const minCases = data?.minCases ?? 3
@@ -160,79 +149,6 @@ export default function PredictionsPage() {
     <>
       <SiteHeader title={t("Predictions")} />
       <div className="space-y-6 p-4 lg:p-6">
-        {/* Objective 1 Self-Explaining Architecture Card */}
-        <div className="rounded-2xl border border-blue-200/90 bg-gradient-to-r from-blue-50/80 via-card to-card p-5 shadow-md">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <Badge className="bg-blue-600 text-white font-semibold text-xs px-2.5 py-0.5">
-                  {t("System Objective 1")}
-                </Badge>
-                <span className="font-bold text-foreground text-sm tracking-tight">
-                  {t("To Predict Mortality Trends")}
-                </span>
-                <span className="relative flex size-2">
-                  <span className="absolute inline-flex size-full animate-ping rounded-full bg-blue-400 opacity-75" />
-                  <span className="relative inline-flex size-2 rounded-full bg-blue-600" />
-                </span>
-              </div>
-              <p className="text-xs text-muted-foreground leading-relaxed max-w-2xl">
-                {t("The system continuously forecasts expected mortality across districts and disease categories over a forward horizon of 14–90 days using historical auto-regression and 95% confidence intervals.")}
-              </p>
-            </div>
-
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setShowMethodology(!showMethodology)}
-              className="h-8 text-xs font-semibold bg-white hover:bg-blue-50 text-blue-700 border-blue-200 gap-1.5 shadow-2xs"
-            >
-              <BrainCircuit className="size-3.5 text-blue-600" />
-              {showMethodology ? t("Hide Methodology") : t("Explain Methodology & Model")}
-              <ChevronDown className={`size-3.5 transition-transform duration-200 ${showMethodology ? "rotate-180" : ""}`} />
-            </Button>
-          </div>
-
-          {showMethodology && (
-            <div className="mt-4 pt-4 border-t border-blue-200/80 space-y-3 text-xs animate-in fade-in-50 duration-200">
-              <div className="grid gap-3 sm:grid-cols-3">
-                <div className="rounded-xl border border-blue-200 bg-white/90 p-3 space-y-1">
-                  <span className="font-bold text-blue-950 flex items-center gap-1.5 text-[11px]">
-                    <Calculator className="size-3.5 text-blue-600" />
-                    {t("Mathematical Formulation")}
-                  </span>
-                  <p className="font-mono text-[10px] text-slate-800 bg-slate-50 p-2 rounded border border-slate-100">
-                    Y(t+h) = ℓ(t) + h·b(t) + s(t+h-m) ± 1.96·σ_res
-                  </p>
-                  <p className="text-[10px] text-muted-foreground">
-                    {t("Decomposes mortality into baseline level ℓ(t), linear velocity b(t), and periodic seasonality s(t).")}
-                  </p>
-                </div>
-
-                <div className="rounded-xl border border-blue-200 bg-white/90 p-3 space-y-1">
-                  <span className="font-bold text-blue-950 flex items-center gap-1.5 text-[11px]">
-                    <Sparkles className="size-3.5 text-amber-500" />
-                    {t("Confidence Intervals (95% CI)")}
-                  </span>
-                  <p className="text-[11px] text-slate-700 leading-relaxed">
-                    {t("Dashed lines represent the central forecast; shaded uncertainty bands correspond to 1.96 standard deviations of residual regression errors.")}
-                  </p>
-                </div>
-
-                <div className="rounded-xl border border-blue-200 bg-white/90 p-3 space-y-1">
-                  <span className="font-bold text-blue-950 flex items-center gap-1.5 text-[11px]">
-                    <Info className="size-3.5 text-blue-600" />
-                    {t("Public Health Utility")}
-                  </span>
-                  <p className="text-[11px] text-slate-700 leading-relaxed">
-                    {t("Enables district health executives to plan bed capacity, drug stockpiles, and healthcare personnel weeks before peak seasonal mortality.")}
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-
         {/* Executive status banner — flips state live as alerts raise */}
         {data?.banner && banner && (
           <Card className={`border-2 shadow-lg ${banner.ring}`}>

@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { Link, useNavigate } from "react-router-dom"
-import { Activity, Eye, EyeOff, FileSearch, Loader2, MapPin, WifiOff } from "lucide-react"
+import { Eye, EyeOff, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -36,48 +36,6 @@ export default function SignInPage() {const{t}=usePreferences();
     }
   }
 
-  const objectives = [
-    {
-      title: t("Predict mortality trends"),
-      desc: t("Forecasts expected deaths from reported notifications, so planners see what's coming."),
-    },
-    {
-      title: t("Detect outbreaks early"),
-      desc: t("Five-layer statistical surveillance raises alerts before an outbreak takes hold."),
-    },
-    {
-      title: t("Identify cause-of-death patterns"),
-      desc: t("ICD-10 coded analytics reveal what is killing people, and where."),
-    },
-  ]
-
-  const features = [
-    {
-      icon: Activity,
-      title: t("Outbreak detection"),
-      desc: t("Real-time mortality surveillance, automated threshold alerts & early cluster warnings"),
-      tag: t("Live Surveillance"),
-    },
-    {
-      icon: FileSearch,
-      title: t("Tele-pathology"),
-      desc: t("Remote digital specimen review and authenticated digital autopsy certification"),
-      tag: t("Digital Forensics"),
-    },
-    {
-      icon: MapPin,
-      title: t("GIS analytics"),
-      desc: t("District → provincial → national disease mapping, hotspot heatmaps and spatial mortality patterns"),
-      tag: t("Geospatial Intel"),
-    },
-    {
-      icon: WifiOff,
-      title: t("Offline field sync"),
-      desc: t("Capture mortality data in the field without connectivity — records queue locally and sync when back online"),
-      tag: t("Field Ready"),
-    },
-  ]
-
   return (
     <main className="h-svh overflow-hidden xl:grid xl:grid-cols-2">
       {/* Left — branded hero panel (ultra-dark green shade with extra-large white circle MOHCC logo) */}
@@ -93,7 +51,7 @@ export default function SignInPage() {const{t}=usePreferences();
           </div>
 
           {/* Under logo circlement — lower left aligned content */}
-          <div className="flex flex-col items-start text-left w-full max-w-lg gap-4">
+          <div className="flex flex-col items-center text-center w-full max-w-lg gap-4">
             <div>
               <h1 className="text-2xl font-bold tracking-tight lg:text-3xl text-white">
                 {t("Disease Detection System")}
@@ -103,45 +61,6 @@ export default function SignInPage() {const{t}=usePreferences();
               </p>
             </div>
 
-            {/* System objectives — the platform states its purpose up front,
-                so the page explains itself before anyone signs in */}
-            <div className="w-full space-y-2">
-              <p className="text-[11px] font-semibold uppercase tracking-widest text-emerald-400/90">
-                {t("System objectives")}
-              </p>
-              <ul className="space-y-1.5">
-                {objectives.map((o) => (
-                  <li key={o.title} className="text-xs leading-relaxed">
-                    <span className="font-semibold text-white">{o.title}</span>
-                    <span className="text-white/75"> — {o.desc}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            {/* Single combined card with invisible format — only words and sleek indicators visible */}
-            <div className="w-full bg-transparent border-0 shadow-none p-0 space-y-3.5 text-left">
-              {features.map((f) => (
-                <div key={f.title} className="flex items-start gap-3 group">
-                  <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/30 group-hover:bg-emerald-500/25 transition-colors">
-                    <f.icon className="size-4" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-white tracking-tight group-hover:text-emerald-200 transition-colors">
-                        {f.title}
-                      </span>
-                      <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
-                        {f.tag}
-                      </span>
-                    </div>
-                    <p className="text-xs text-white/80 leading-relaxed mt-0.5 font-normal">
-                      {f.desc}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
           </div>
         </div>
       </div>

@@ -144,9 +144,9 @@ export async function caseInsights(notificationId: string): Promise<CaseInsights
     district: n.district,
     category: n.category,
     insights: [
-      { objective: "trend", label: "Trend impact (Objective 1)", text: trendText },
-      { objective: "outbreak", label: "Outbreak status (Objective 2)", text: outbreakText },
-      { objective: "pattern", label: "Pattern recognition (Objective 3)", text: patternText },
+      { objective: "trend", label: "Trend impact", text: trendText },
+      { objective: "outbreak", label: "Outbreak status", text: outbreakText },
+      { objective: "pattern", label: "Pattern recognition", text: patternText },
     ],
   }
 }
