@@ -11,3 +11,8 @@ allowBuilds:
 # (260 chars) under the .pnpm layout, which makes spawned binaries (esbuild)
 # fail with ENOENT. Hoisted paths stay under the limit.
 nodeLinker: hoisted
+
+# Don't run `pnpm install` before every script — this tree was moved with a
+# pre-built node_modules; the check tries to prune packages and fails on
+# build-script approval, which broke the Python service launches.
+verifyDepsBeforeRun: false

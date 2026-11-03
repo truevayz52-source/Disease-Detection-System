@@ -4,7 +4,7 @@
 #   ngrok reserved domain (PRIMARY public path, stable URL) ->
 #   cloudflared quick tunnel (BACKUP public path) ->
 #   republish the stable ngrok URL to BOTH lookup pointers (Firebase + GitHub).
-$repo = "C:\Users\tanak\OneDrive\Desktop\School Project\Forensic Mortality System Chapter 1-7\cross-platform-application-development-main\cross-platform-application-development-main"
+$repo = "C:\Users\tanak\OneDrive\Desktop\School Project\Forensic Mortality System Chapter 1-7\cross-platform-application-development-main"
 $logs = "$env:TEMP\dds-startup"
 New-Item -ItemType Directory -Force -Path $logs | Out-Null
 
