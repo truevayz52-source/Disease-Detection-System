@@ -23,7 +23,7 @@ import 'ui/app_shell.dart';
 
 /// Routes the executive role lands on — mirrors App.tsx's dashboard split.
 const _analystRoles = ['public_health_analyst'];
-const _pathologyRoles = ['pathologist', 'public_health_analyst'];
+const _pathologyRoles = ['pathologist'];
 
 /// Role gates mirroring RequireRole in client/src/App.tsx.
 final _routeRoles = <String, List<String>>{

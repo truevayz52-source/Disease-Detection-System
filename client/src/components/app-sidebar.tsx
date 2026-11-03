@@ -61,9 +61,9 @@ const NAV_ITEMS: NavItem[] = [
     href: "/autopsy",
     label: "Autopsies",
     icon: Stethoscope,
-    roles: ["pathologist", "public_health_analyst"],
+    roles: ["pathologist"],
   },
-{href:"/voice-autopsy",label: "Verbal Autopsy",icon:ListChecks,roles:["medical_officer","mortuary_clerk"]},
+{href:"/voice-autopsy",label: "Verbal Autopsy",icon:ListChecks,roles:["mortuary_clerk"]},
 {href:"/signals",label: "Community Reports",icon:Radio,roles:["medical_officer","mortuary_clerk","public_health_analyst"]},
 {href:"/mpdsr",label: "Maternal Deaths",icon:ListChecks,roles:["medical_officer","public_health_analyst"]},
 {
@@ -91,7 +91,7 @@ const NAV_ITEMS: NavItem[] = [
     roles: ["public_health_analyst"],
   },
 {href:"/cross-border",label: "Border Cases",icon:ListChecks,roles:["medical_officer","public_health_analyst"]},
-{href:"/resource-allocation",label: "Resource Planning",icon:ListChecks,roles:["public_health_analyst"]},
+
 {href:"/reports",label: "Reports",icon:ListChecks,roles:["public_health_analyst","executive"]},
 
 {href:"/offline-sync",label: "Sync Status",icon:ListChecks,roles:["medical_officer","mortuary_clerk"]},
@@ -107,7 +107,7 @@ const NAV_ITEMS: NavItem[] = [
     icon: ListChecks,
     roles: ["system_admin"],
   },
-{href:"/alert-config",label: "Alert Settings",icon:ListChecks,roles:["public_health_analyst"]},
+{href:"/alert-config",label: "Alert Settings",icon:ListChecks,roles:["system_admin"]},
 {href:"/security-dashboard",label: "Security",icon:ShieldAlert,roles:["system_admin"]},
 {
     href: "/audit",

@@ -134,11 +134,11 @@ class _NotificationDetailScreenState extends State<NotificationDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final user = context.watch<AuthRepository>().user;
-    final canUpload =
+    final canUpload = user != null && user.role == 'pathologist';
+    final hidePathology =
         user != null &&
         const [
           'medical_officer',
-          'pathologist',
           'public_health_analyst',
         ].contains(user.role);
     final n = _detail?.notification;
@@ -257,10 +257,11 @@ class _NotificationDetailScreenState extends State<NotificationDetailScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  SectionCard(
-                    title:
-                        '${tr('Tele-pathology images')} (${_detail!.images.length})',
+                  if (!hidePathology) ...[
+                    const SizedBox(height: 16),
+                    SectionCard(
+                      title:
+                          '${tr('Tele-pathology images')} (${_detail!.images.length})',
                     trailing: canUpload
                         ? OutlinedButton.icon(
                             onPressed: _uploading ? null : _pickAndUpload,
@@ -300,10 +301,10 @@ class _NotificationDetailScreenState extends State<NotificationDetailScreen> {
                                 ),
                             ],
                           ),
-                  ),
-                  const SizedBox(height: 16),
-                  SectionCard(
-                    title: tr('Autopsy report'),
+                    ),
+                    const SizedBox(height: 16),
+                    SectionCard(
+                      title: tr('Autopsy report'),
                     child: _detail!.autopsy == null
                         ? EmptyState(tr('No autopsy report yet.'))
                         : Column(
@@ -345,7 +346,8 @@ class _NotificationDetailScreenState extends State<NotificationDetailScreen> {
                               ),
                             ],
                           ),
-                  ),
+                    ),
+                  ],
                   if (_detail!.certification != null) ...[
                     const SizedBox(height: 16),
                     SectionCard(

@@ -8,7 +8,7 @@ import { notifyUser } from "./notifications-realtime.js"
 
 export const workflowsRouter = Router()
 workflowsRouter.use(["/mpdsr","/alerts/thresholds","/cross-border","/comments"],requireAuth)
-const analysts = requireRole("public_health_analyst")
+const thresholdAdmins = requireRole("public_health_analyst","system_admin")
 const clinical = requireRole("medical_officer","public_health_analyst")
 // ---------------------------------------------------------------------------
 // MPDSR — maternal/perinatal death surveillance & response.
@@ -147,18 +147,18 @@ workflowsRouter.patch("/mpdsr/actions/:id",clinical,async(req,res)=>{
   res.json({ok:true})
 })
 const threshold=z.object({district:z.string().max(100).nullable().default(null),diseaseCategory:z.string().max(100).nullable().default(null),caseThreshold:z.number().int().min(1).max(100000),timeWindowHours:z.number().int().min(1).max(8760),priority:z.enum(["normal","high","critical"]).default("normal"),active:z.boolean().default(true)})
-workflowsRouter.get("/alerts/thresholds",analysts,async(_req,res)=>res.json({items:await query("SELECT * FROM alert_thresholds ORDER BY created_at DESC")}))
-workflowsRouter.post("/alerts/thresholds",analysts,async(req,res)=>{
+workflowsRouter.get("/alerts/thresholds",thresholdAdmins,async(_req,res)=>res.json({items:await query("SELECT * FROM alert_thresholds ORDER BY created_at DESC")}))
+workflowsRouter.post("/alerts/thresholds",thresholdAdmins,async(req,res)=>{
   const d=threshold.parse(req.body),id=newId("thr")
   await query("INSERT INTO alert_thresholds (threshold_id,configured_by,district,disease_category,case_threshold,time_window_hours,alert_priority,is_active) VALUES (?,?,?,?,?,?,?,?)",[id,req.user!.userId,d.district,d.diseaseCategory,d.caseThreshold,d.timeWindowHours,d.priority,d.active])
   await writeAudit(req,{action:"create_threshold",entityType:"alert_thresholds",entityId:id,details:d});res.status(201).json({id})
 })
-workflowsRouter.patch("/alerts/thresholds/:id",analysts,async(req,res)=>{
+workflowsRouter.patch("/alerts/thresholds/:id",thresholdAdmins,async(req,res)=>{
   const d=threshold.parse(req.body)
   await query("UPDATE alert_thresholds SET district=?,disease_category=?,case_threshold=?,time_window_hours=?,alert_priority=?,is_active=? WHERE threshold_id=?",[d.district,d.diseaseCategory,d.caseThreshold,d.timeWindowHours,d.priority,d.active,req.params.id])
   await writeAudit(req,{action:"update_threshold",entityType:"alert_thresholds",entityId:req.params.id,details:d});res.json({ok:true})
 })
-workflowsRouter.delete("/alerts/thresholds/:id",analysts,async(req,res)=>{
+workflowsRouter.delete("/alerts/thresholds/:id",thresholdAdmins,async(req,res)=>{
   await query("DELETE FROM alert_thresholds WHERE threshold_id=?",[req.params.id]);await writeAudit(req,{action:"delete_threshold",entityType:"alert_thresholds",entityId:req.params.id});res.json({ok:true})
 })
 workflowsRouter.get("/cross-border/cases",clinical,async(req,res)=>{

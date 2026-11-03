@@ -237,7 +237,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     'all': tr('All statuses'),
                     'pending_review': tr('Pending review'),
                     'under_review': tr('Under review'),
-                    'autopsy_complete': tr('Autopsy complete'),
+                    if (role != 'medical_officer' &&
+                        role != 'public_health_analyst')
+                      'autopsy_complete': tr('Autopsy complete'),
                     'finalized': tr('Finalized'),
                   },
                   onChanged: (v) {

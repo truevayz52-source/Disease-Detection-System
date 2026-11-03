@@ -106,7 +106,9 @@ export default function NotificationsPage() {const{t}=usePreferences();
               <SelectItem value="all">{t("All statuses")}</SelectItem>
               <SelectItem value="pending_review">{t("Pending review")}</SelectItem>
               <SelectItem value="under_review">{t("Under review")}</SelectItem>
-              <SelectItem value="autopsy_complete">{t("Autopsy complete")}</SelectItem>
+              {!["medical_officer", "public_health_analyst"].includes(user?.role ?? "") && (
+                <SelectItem value="autopsy_complete">{t("Autopsy complete")}</SelectItem>
+              )}
               <SelectItem value="finalized">{t("Finalized")}</SelectItem>
             </SelectContent>
           </Select>

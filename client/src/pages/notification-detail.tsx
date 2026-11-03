@@ -49,7 +49,8 @@ export default function NotificationDetailPage() {const{t}=usePreferences();
   }
 
   const n = data?.notification
-  const canUpload = user && ["medical_officer", "pathologist"].includes(user.role)
+  const canUpload = user && user.role === "pathologist"
+  const hidePathology = !!user && ["medical_officer", "public_health_analyst"].includes(user.role)
   const certUrl = `/api/notifications/${id}/certificate?token=${encodeURIComponent(getToken() ?? "")}`
 
   return (
@@ -117,6 +118,7 @@ export default function NotificationDetailPage() {const{t}=usePreferences();
               </CardContent>
             </Card>
 
+            {!hidePathology && (
             <Card className="shadow-lg">
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle className="text-sm">Tele-pathology images ({data?.images.length ?? 0})</CardTitle>
@@ -154,9 +156,26 @@ export default function NotificationDetailPage() {const{t}=usePreferences();
                 )}
               </CardContent>
             </Card>
+            )}
           </div>
 
           <div className="space-y-6">
+            {hidePathology ? (
+              (n.status === "finalized" || n.status === "certified") && (
+                <Card className="shadow-lg">
+                  <CardHeader>
+                    <CardTitle className="text-sm">{t("Death certificate")}</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <Button variant="outline" size="sm" className="w-full" asChild>
+                      <a href={certUrl} target="_blank" rel="noreferrer">
+                        <Printer className="size-4" /> {t("Death certificate")}
+                      </a>
+                    </Button>
+                  </CardContent>
+                </Card>
+              )
+            ) : (
             <Card className="shadow-lg">
               <CardHeader>
                 <CardTitle className="text-sm">{t("Autopsy report")}</CardTitle>
@@ -199,6 +218,7 @@ export default function NotificationDetailPage() {const{t}=usePreferences();
                 )}
               </CardContent>
             </Card>
+            )}
 
             {data?.certification && (
               <Card className="shadow-lg">

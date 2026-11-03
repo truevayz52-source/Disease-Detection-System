@@ -69,8 +69,11 @@ export default function DashboardPage() {const{t}=usePreferences();
   const { data } = useSWR<DashboardData>("/analytics/dashboard", fetcher, { refreshInterval: 60_000 })
   const { data: notifications } = useSWR<{ items: DeathNotification[] }>("/notifications", fetcher)
   const { data: alerts, mutate: mutateAlerts } = useSWR<{ items: OutbreakAlert[] }>("/alerts?status=active", fetcher, { refreshInterval: 30_000 })
-  // Analyst/executive-only endpoint — other roles just don't get the forecast extras.
-  const { data: preds } = useSWR<DashboardPredictions>("/analytics/predictions", fetcher, { refreshInterval: 60_000, shouldRetryOnError: false })
+  // Analyst/executive-only endpoint — skip the request entirely for other
+  // roles so they never see a 403 (forecast extras stay hidden for them).
+  const { data: preds } = useSWR<DashboardPredictions>(
+    user?.role === "public_health_analyst" || user?.role === "executive" ? "/analytics/predictions" : null,
+    fetcher, { refreshInterval: 60_000, shouldRetryOnError: false })
 
   const k = data?.kpis
   const alertTypeName = (a: OutbreakAlert) =>
@@ -78,11 +81,12 @@ export default function DashboardPage() {const{t}=usePreferences();
   const alertsSub = (alerts?.items ?? [])
     .map((a) => `${alertTypeName(a)}: ${a.disease_category} — ${a.district}`)
     .join(", ") || undefined
+  const hideFinalizedKpi = user?.role === "public_health_analyst" || user?.role === "medical_officer"
   const kpis = [
     { label: t("Deaths (7 days)"), value: k?.deathsLast7Days, icon: Activity, delta: pctChange(k?.deathsLast7Days ?? 0, k?.deathsPrev7Days ?? 0), color: "rose" as const },
     { label: t("Pending reviews"), value: k?.pendingReviews, icon: Hourglass, color: "amber" as const, to: "/notifications?status=pending_review" },
     { label: t("Active alerts"), value: k?.activeAlerts, icon: AlertTriangle, pulse: (k?.activeAlerts ?? 0) > 0, color: "red" as const, sub: alertsSub },
-    { label: t("Finalized autopsies"), value: k?.finalizedAutopsies, icon: FileCheck, color: "emerald" as const },
+    ...(hideFinalizedKpi ? [] : [{ label: t("Finalized autopsies"), value: k?.finalizedAutopsies, icon: FileCheck, color: "emerald" as const }]),
     { label: t("MPDSR cases (30d)"), value: k?.mpdsrLast30Days, icon: Baby, delta: pctChange(k?.mpdsrLast30Days ?? 0, k?.mpdsrPrev30Days ?? 0), color: "purple" as const },
     { label: t("Total notifications"), value: k?.totalNotifications, icon: ClipboardList, color: "blue" as const },
   ]

@@ -9,7 +9,7 @@ const MpdsrPage = lazy(() => import("@/pages/workflows").then(m => ({default:m.M
 const ThresholdPage = lazy(() => import("@/pages/workflows").then(m => ({default:m.ThresholdPage})))
 const CrossBorderPage = lazy(() => import("@/pages/workflows").then(m => ({default:m.CrossBorderPage})))
 const ExecutivePage = lazy(() => import("@/pages/operations").then(m => ({default:m.ExecutivePage})))
-const ForecastPage = lazy(() => import("@/pages/operations").then(m => ({default:m.ForecastPage})))
+
 const ReportsPage = lazy(() => import("@/pages/operations").then(m => ({default:m.ReportsPage})))
 const SecurityPage = lazy(() => import("@/pages/operations").then(m => ({default:m.SecurityPage})))
 const SettingsPage = lazy(() => import("@/pages/operations").then(m => ({default:m.SettingsPage})))
@@ -73,13 +73,13 @@ export default function App() {
             <Route path="/profile" element={<UserProfile />} />
             <Route path="/notifications-center" element={<NotificationsCenter />} />
             <Route element={<RequireRole roles={["medical_officer","mortuary_clerk","pathologist","public_health_analyst"]} />}><Route path="/search" element={<SearchPage />} /></Route>
-            <Route element={<RequireRole roles={["medical_officer","mortuary_clerk"]} />}><Route path="/offline-sync" element={<OfflineSync />} /><Route path="/voice-autopsy" element={<VoicePage />} /></Route>
+            <Route element={<RequireRole roles={["medical_officer","mortuary_clerk"]} />}><Route path="/offline-sync" element={<OfflineSync />} /></Route>
+            <Route element={<RequireRole roles={["mortuary_clerk"]} />}><Route path="/voice-autopsy" element={<VoicePage />} /></Route>
             <Route element={<RequireRole roles={["medical_officer","mortuary_clerk","public_health_analyst"]} />}><Route path="/signals" element={<SignalRegistryPage />} /></Route>
             <Route element={<RequireRole roles={["medical_officer","public_health_analyst"]} />}><Route path="/mpdsr" element={<MpdsrPage />} /><Route path="/cross-border" element={<CrossBorderPage />} /></Route>
 
-            <Route element={<RequireRole roles={["public_health_analyst"]} />}><Route path="/alert-config" element={<ThresholdPage />} /><Route path="/resource-allocation" element={<ForecastPage />} /></Route>
             <Route element={<RequireRole roles={["public_health_analyst","executive"]} />}><Route path="/reports" element={<ReportsPage />} /><Route path="/executive-dashboard" element={<ExecutivePage />} /></Route>
-            <Route element={<RequireRole roles={["system_admin"]} />}><Route path="/security-dashboard" element={<SecurityPage />} /><Route path="/system-settings" element={<SettingsPage />} /></Route>
+            <Route element={<RequireRole roles={["system_admin"]} />}><Route path="/security-dashboard" element={<SecurityPage />} /><Route path="/system-settings" element={<SettingsPage />} /><Route path="/alert-config" element={<ThresholdPage />} /></Route>
             <Route element={<RequireRole roles={["medical_officer", "mortuary_clerk", "public_health_analyst"]} />}>
               <Route path="/notifications" element={<NotificationsPage />} />
             </Route>
@@ -93,7 +93,7 @@ export default function App() {
               <Route path="/pathology/queue" element={<PathologyQueuePage />} />
               <Route path="/pathology/review/:id" element={<PathologyReviewPage />} />
             </Route>
-            <Route element={<RequireRole roles={["pathologist", "public_health_analyst"]} />}>
+            <Route element={<RequireRole roles={["pathologist"]} />}>
               <Route path="/autopsy" element={<AutopsiesPage />} />
               <Route path="/autopsy/:id" element={<AutopsyDetailPage />} />
             </Route>

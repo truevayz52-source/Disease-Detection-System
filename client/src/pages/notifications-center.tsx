@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { api } from "@/lib/api"
+import { useAuth } from "@/lib/auth"
 import { usePreferences } from "@/lib/preferences"
 
 interface InboxItem {
@@ -46,17 +47,19 @@ function timeAgo(iso: string) {
 }
 
 export default function NotificationsCenter() {const{t}=usePreferences();
+  const { user } = useAuth()
   const { data, error, isLoading, mutate } = useSWR<{ items: InboxItem[]; unread: number }>(
     "/inbox", api, { refreshInterval: 15_000 },
   )
   const [tab, setTab] = useState<"all" | "unread" | "read">("all")
+  const hidePathology = !!user && ["medical_officer", "public_health_analyst"].includes(user.role)
 
   const items = useMemo(() => {
-    const list = data?.items ?? []
+    const list = (data?.items ?? []).filter((n) => !hidePathology || n.notification_type !== "autopsy")
     if (tab === "unread") return list.filter((n) => !n.is_read)
     if (tab === "read") return list.filter((n) => n.is_read)
     return list
-  }, [data, tab])
+  }, [data, tab, hidePathology])
 
   const unread = data?.unread ?? 0
 

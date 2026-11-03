@@ -87,10 +87,8 @@ final kNavItems = <NavItem>[
   ),
   NavItem('/autopsy', tr('Autopsy Reports'), Icons.medical_services_outlined, [
     'pathologist',
-    'public_health_analyst',
   ]),
   NavItem('/voice-autopsy', tr('Verbal Autopsy'), Icons.mic_none_outlined, [
-    'medical_officer',
     'mortuary_clerk',
   ]),
   NavItem('/signals', tr('Mortality Signals'), Icons.sensors_outlined, [
@@ -143,7 +141,7 @@ final kNavItems = <NavItem>[
     ['system_admin'],
   ),
   NavItem('/alert-config', tr('Alert Thresholds'), Icons.tune_outlined, [
-    'public_health_analyst',
+    'system_admin',
   ]),
   NavItem(
     '/security-dashboard',
